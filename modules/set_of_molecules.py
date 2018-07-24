@@ -3,6 +3,7 @@ from termcolor import colored
 from .molecule import Molecule, MoleculeChg
 from collections import Counter
 from tabulate import tabulate
+from numpy import array
 
 
 def sort(a, b):
@@ -102,13 +103,20 @@ Number of atoms type:  {}\n
             molecules_data = [[line.split() for line in molecule.splitlines()]
                               for molecule in charges_file.read().split("\n\n")[:-1]]
             self.num_of_atoms = 0
+            all_charges = []
+            atomic_types_charges = {}
             for molecule in molecules_data:
                 name = molecule[0][0]
                 num_of_atoms = int(molecule[1][0])
                 self.num_of_atoms += num_of_atoms
                 atomic_symbols = [atom_line[1] for atom_line in molecule[2:]]
-                charges = [float(atom_line[2]) for atom_line in molecule[2:]]
+                charges = array([float(atom_line[2]) for atom_line in molecule[2:]])
                 self.molecules.append(MoleculeChg(name, num_of_atoms, atomic_symbols, charges))
+                for atomic_symbol, charge in zip(atomic_symbols, charges):
+                    atomic_types_charges.setdefault(atomic_symbol, []).append(charge)
+                all_charges.extend(charges)
+            for atomic_symbol, charge in atomic_types_charges.items():
+                atomic_types_charges[atomic_symbol] = array(charge)
             self.num_of_molecules = len(self.molecules)
-
-
+            self.all_charges = array(all_charges)
+            self.atomic_types_charges = atomic_types_charges

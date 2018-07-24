@@ -24,5 +24,6 @@ if __name__ == '__main__':
     if args.mode == "comparison":
         Compare(args.ref_charges,
                 args.charges,
+                args.save_fig,
                 from_file=True)
 

@@ -16,15 +16,17 @@ def load_arguments():
                         choices=("EEM", "SFKEEM", "QEq"))
     parser.add_argument("--atomic_types_pattern",
                         help="For mode set_of_molecules_info only. Define atomic types for statistics",
-                        choices=("atom", "atom_high_bond"))
+                        choices=("atom", "atom_high_bond"), default="atom_high_bond")
+    parser.add_argument("--save_fig", help="For comparison or parameterization only. "
+                                           "Correlation graphs are printed and saved.", action="store_true")
     parser.add_argument("-f", "--rewriting_with_force", action="store_true",
                         help="All existed files with the same names like your outputs will be replaced.")
     argcomplete.autocomplete(parser)
     args = parser.parse_args()
 
     if args.mode == "set_of_molecules_info":
-        if args.sdf is None or args.atomic_types_pattern is None:
-            parser.error("For set_of_molecules_info must choice --sdf and --atomic_types_pattern.")
+        if args.sdf is None:
+            parser.error("For set_of_molecules_info must choice --sdf.")
 
     if args.mode == "calculation":
         if args.method is None or args.sdf is None or args.parameters is None or args.charges is None:
