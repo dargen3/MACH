@@ -33,11 +33,11 @@ def load_arguments():
             parser.error("For calculation must be choice --method, --sdf, --parameters and --charges.")
 
     elif args.mode == "parameterization":
-        if args.charges_for_parameterization is None or args.method is None \
+        if args.ref_charges is None or args.method is None \
                 or args.sdf is None or args.parameters is None \
                 or args.new_parameters is None or args.charges is None:
-            parser.error("For parameterization must be choice --right_charges, --method, --sdf_input,",
-                         "--parameters, --chg_output and --new_parameters.")
+            parser.error("For parameterization must be choice --ref_charges, --method, --sdf,",
+                         "--parameters, --new_parameters and --charges.")
 
     if args.mode == "comparison":
         if args.charges is None or args.ref_charges is None:

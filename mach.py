@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 from modules.arguments import load_arguments
 from modules.set_of_molecules import SetOfMolecules
-from modules.calculation import calculate_charges
-from modules.comparison import Compare
+from modules.calculation import Calculation
+from modules.comparison import Comparison
 
 from termcolor import colored
 
@@ -15,15 +15,17 @@ if __name__ == '__main__':
         set_of_molecules.info(args.atomic_types_pattern)
 
     if args.mode == "calculation":
-        calculate_charges(args.sdf,
-                          args.method,
-                          args.parameters,
-                          args.charges,
-                          args.rewriting_with_force)
+        Calculation(args.sdf,
+                    args.method,
+                    args.parameters,
+                    args.charges,
+                    args.rewriting_with_force)
+    if args.mode == "parameterization":
+        Parameterize()
 
     if args.mode == "comparison":
-        Compare(args.ref_charges,
-                args.charges,
-                args.save_fig,
-                from_file=True)
+        Comparison(args.ref_charges,
+                   args.charges,
+                   args.save_fig,
+                   from_file=True)
 

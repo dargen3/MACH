@@ -26,8 +26,6 @@ class SetOfMolecules:
             if molecules_data[-5:].strip() != "$$$$":
                 exit(colored("{} is not valid sdf file. Last line is not $$$$.".format(sdf.name), "red"))
             molecules_data = [x.splitlines() for x in molecules_data.split("$$$$\n")]
-            from time import time
-            start = time()
             for molecule_data in molecules_data[:-1]:
                 type_of_sdf_record = molecule_data[3][-5:]
                 if type_of_sdf_record == "V2000":
@@ -36,7 +34,6 @@ class SetOfMolecules:
                     self.load_sdf_v3000(molecule_data)
                 else:
                     exit(colored("{} if not valid sdf file.".format(sdf), "red"))
-            print(time() - start)
             self.num_of_molecules = len(self.molecules)
             self.num_of_atoms = sum([len(molecule) for molecule in self.molecules])
         print(colored("ok\n", "green"))
