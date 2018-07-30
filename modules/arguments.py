@@ -11,9 +11,12 @@ def load_arguments():
     parser.add_argument("--charges", help="File to store calculated charges of file with charges for comparison.")
     parser.add_argument("--ref_charges", help="File with reference charges for comparison.")
     parser.add_argument("--parameters", help="File with parameters.")
+    parser.add_argument("--new_parameters", help="File to store new parametes.")
     # metody?? jake
     parser.add_argument("--method", help="Empirical method for calculation partial atomic charges.",
                         choices=("EEM", "SFKEEM", "QEq"))
+    parser.add_argument("--optimization_method", help="Optimization method for parameterization.", choices=("minimization", "guided_minimization"))
+    parser.add_argument("--cpu", help="Only for guided minimization.", default=1, type=int)
     parser.add_argument("--atomic_types_pattern",
                         help="For mode set_of_molecules_info only. Define atomic types for statistics",
                         choices=("atom", "atom_high_bond"), default="atom_high_bond")

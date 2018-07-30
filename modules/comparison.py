@@ -4,6 +4,9 @@ from numpy import sqrt, mean, max, min, sum, corrcoef
 from scipy.stats import pearsonr
 from tabulate import tabulate
 from .set_of_molecules import SetOfMolecules
+from matplotlib import pyplot as plt, cm
+from sys import exit
+from collections import namedtuple
 
 
 def calculate_statistics(ref_charges, charges):
@@ -23,15 +26,14 @@ class Comparison:
             self.ref_set_of_molecules = SetOfMolecules(ref_charges_data, from_charges_file=True)
             self.set_of_molecules = SetOfMolecules(charges_data, from_charges_file=True)
         else:
-            pass
-            # zipped_data = zip(ref_charges, charges_data)
+            set_of_molecules_nt = namedtuple("set_of_molecules", ("all_charges", "atomic_types_charges", "molecules"))
+            self.ref_set_of_molecules = ref_charges_data
+            self.set_of_molecules = set_of_molecules_nt(charges_data[0], charges_data[1], charges_data[2])
         self.statistics()
         if save_fig:
             self.graphs()
 
     def graphs(self):
-        from matplotlib import pyplot as plt, cm
-        from sys import exit
         fig = plt.figure(figsize=(11, 9))
         all_atoms_graph = fig.add_subplot(111)
         colors = cm.tab20.colors
@@ -40,12 +42,11 @@ class Comparison:
                          "F~1": 9, "I~1": 9, "H": 0, "C": 2, "N": 4, "O": 6, "S": 8}
         zipped_charges = list(zip(self.ref_set_of_molecules.atomic_types_charges.items(),
                                   self.set_of_molecules.atomic_types_charges.items()))
-        fig_name = self.set_of_molecules.file.split("/")[-1][:-4]
         for index, ((atomic_symbol, ref_charges), (_, charges)) in enumerate(zipped_charges):
             try:
                 color_number = color_numbers[atomic_symbol]
             except KeyError:
-                exit("No color for {} atomic type!".format(atomic_symbol))
+                exit(colored("No color for {} atomic type!".format(atomic_symbol), "red"))
             all_atoms_graph.scatter(ref_charges, charges, marker=".", color=colors[color_number], label=atomic_symbol)
             atom_type_graph = plt.figure(figsize=(11, 9)).add_subplot(111, rasterized=True)
             atom_type_graph.set_title(atomic_symbol)
@@ -59,11 +60,11 @@ class Comparison:
             plt.text(plt.xlim()[1] - 0.1, plt.ylim()[0] + 0.1, "RMSD: {:.3f}\n$R^2$: {:.3f}".
                      format(self.atomic_types_statistical_data[index][1],
                             self.atomic_types_statistical_data[index][4]), ha='right', va='bottom', fontsize=28)
-            plt.savefig("{}-{}".format(fig_name, atomic_symbol, dpi=300))
+            plt.savefig(atomic_symbol, dpi=300)
         all_atoms_graph.text(plt.xlim()[1] - 0.1, plt.ylim()[0] + 0.1, "RMSD: {:.3f}\n$R^2$: {:.3f}".
                              format(self.all_atoms_data[0], self.all_atoms_data[3]), ha='right', va='bottom', fontsize=28)
         all_atoms_graph.legend(fontsize=14, loc="upper left")
-        fig.savefig("{}.png".format(fig_name), dpi=300)
+        fig.savefig("all_atomic_types.png", dpi=300)
         plt.show()
 
     def statistics(self):
@@ -75,7 +76,7 @@ class Comparison:
                                                             self.set_of_molecules.atomic_types_charges.items()):
             self.atomic_types_statistical_data.append([atomic_type] + calculate_statistics(ref_charges, charges))
         molecules_statistical_data = []
-        for ref_molecule, molecule in zip(self.ref_set_of_molecules, self.set_of_molecules):
+        for ref_molecule, molecule in zip(self.ref_set_of_molecules, self.set_of_molecules.molecules):
             molecules_statistical_data.append(calculate_statistics(ref_molecule.charges, molecule.charges))
         print(colored("ok\n", "green"))
         print("Statistics for atoms:\n{}\n".format((tabulate([self.all_atoms_data],
@@ -85,7 +86,7 @@ class Comparison:
                                                                      mean([x[1] for x in molecules_statistical_data]),
                                                                      mean([x[2] for x in molecules_statistical_data]),
                                                                      mean([x[3] for x in molecules_statistical_data]),
-                                                                     self.set_of_molecules.num_of_molecules]],
+                                                                     self.ref_set_of_molecules.num_of_molecules]],
                                                               headers=["RMSD", "max deviation", "average deviation",
                                                                        "pearson^2", "num. of molecules"]))))
         print("Statistics for atomic types:\n{}\n".format(tabulate(self.atomic_types_statistical_data,

@@ -3,6 +3,7 @@ from modules.arguments import load_arguments
 from modules.set_of_molecules import SetOfMolecules
 from modules.calculation import Calculation
 from modules.comparison import Comparison
+from modules.parameterization import Parameterization
 
 from termcolor import colored
 
@@ -20,8 +21,18 @@ if __name__ == '__main__':
                     args.parameters,
                     args.charges,
                     args.rewriting_with_force)
+
     if args.mode == "parameterization":
-        Parameterize()
+        Parameterization(args.sdf,
+                         args.ref_charges,
+                         args.method,
+                         args.optimization_method,
+                         args.cpu,
+                         args.parameters,
+                         args.new_parameters,
+                         args.charges,
+                         args.rewriting_with_force,
+                         args.save_fig)
 
     if args.mode == "comparison":
         Comparison(args.ref_charges,

@@ -1,14 +1,11 @@
-from numpy import array
+from numpy import array, float64
 from scipy import spatial
 from sys import exit
 from termcolor import colored
 
 class MoleculeChg:
-    def __init__(self, name, num_of_atoms, atomic_symbols, charges):
-        self.name = name
-        self.num_of_atoms = num_of_atoms
-        self.atomic_symbols = atomic_symbols
-        self.charges = charges
+    def __init__(self, charges):
+        self.charges = array(charges, dtype=float64)
 
 
 def create_atom_high_bond(num_of_atoms, bonds, atomic_symbols):
@@ -37,9 +34,9 @@ class Molecule:
             self.distance_matrix = spatial.distance.cdist(self.atomic_coordinates, self.atomic_coordinates)
             try:
                 if method.atomic_types_pattern == "atom":
-                    self.symbolic_numbers = array([method.atomic_types.index(atom_type) for atom_type in self.atomic_symbols])
+                    self.symbolic_numbers = array([method.atomic_types.index(atomic_type) for atomic_type in self.atomic_symbols])
                 elif method.atomic_types_pattern == "atom_high_bond":
-                    self.symbolic_numbers = array([method.atomic_types.index(atom_type) for atom_type in self.atomic_symbols_high_bond])
+                    self.symbolic_numbers = array([method.atomic_types.index(atomic_type) for atomic_type in self.atomic_symbols_high_bond])
             except ValueError as VE:
                 print(str(dir(VE)))
                 exit(colored("{}\n".format(str(VE)), "red"))

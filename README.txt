@@ -27,3 +27,4 @@ vypada to skarede
 
 getsizeof() - chová se divně
 
+write parameters

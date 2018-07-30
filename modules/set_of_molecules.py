@@ -3,7 +3,8 @@ from termcolor import colored
 from .molecule import Molecule, MoleculeChg
 from collections import Counter
 from tabulate import tabulate
-from numpy import array
+from numpy import array, float64
+
 
 
 def sort(a, b):
@@ -18,7 +19,7 @@ class SetOfMolecules:
         self.molecules = []
         self.file = file
         if from_charges_file:
-            self.load_molecules_from_charges_file()
+            self.set_of_molecules_from_charges_file()
         else:
             self.method = method
             with open(file, "r") as sdf:
@@ -36,6 +37,9 @@ class SetOfMolecules:
                     exit(colored("{} if not valid sdf file.".format(sdf), "red"))
             self.num_of_molecules = len(self.molecules)
             self.num_of_atoms = sum([len(molecule) for molecule in self.molecules])
+            if self.method:
+                self.all_symbolic_numbers = array([symbolic_number for molecule in self.molecules
+                                                   for symbolic_number in molecule.symbolic_numbers])
         print(colored("ok\n", "green"))
 
     def load_sdf_v2000(self, molecular_data):
@@ -95,25 +99,43 @@ Number of atoms type:  {}\n
 {}\n""".format(self.file, self.num_of_molecules, self.num_of_atoms, len(counter),
            tabulate(table, headers=["Type", "Number", "%"])))
 
-    def load_molecules_from_charges_file(self):
+    def set_of_molecules_from_charges_file(self):
         with open(self.file, "r") as charges_file:
             molecules_data = [[line.split() for line in molecule.splitlines()]
                               for molecule in charges_file.read().split("\n\n")[:-1]]
-            self.num_of_atoms = 0
             all_charges = []
             atomic_types_charges = {}
+            self.num_of_molecules = 0
             for molecule in molecules_data:
-                name = molecule[0][0]
-                num_of_atoms = int(molecule[1][0])
-                self.num_of_atoms += num_of_atoms
+                self.num_of_molecules += 1
                 atomic_symbols = [atom_line[1] for atom_line in molecule[2:]]
                 charges = array([float(atom_line[2]) for atom_line in molecule[2:]])
-                self.molecules.append(MoleculeChg(name, num_of_atoms, atomic_symbols, charges))
+                self.molecules.append(MoleculeChg(charges))
                 for atomic_symbol, charge in zip(atomic_symbols, charges):
                     atomic_types_charges.setdefault(atomic_symbol, []).append(charge)
                 all_charges.extend(charges)
             for atomic_symbol, charge in atomic_types_charges.items():
                 atomic_types_charges[atomic_symbol] = array(charge)
-            self.num_of_molecules = len(self.molecules)
-            self.all_charges = array(all_charges)
+            self.all_charges = array(all_charges, dtype=float64)
             self.atomic_types_charges = atomic_types_charges
+
+    def add_charges(self, file):
+        print("Loading charges from {}...".format(file))
+        with open(file, "r") as charges_file:
+            charges = []
+            for molecule_data, molecule in zip(charges_file.read().split("\n\n")[:-1], self.molecules):
+                molecule_charges = []
+                for line in molecule_data.splitlines():
+                    try:
+                        molecule_charges.append(float(line.split()[2]))
+                    except IndexError:
+                        pass
+                charges.extend(molecule_charges)
+                molecule.charges = array(molecule_charges)
+        self.all_charges = array(charges, dtype=float64)
+        atomic_types_charges = [[] for x in range(len(self.method.atomic_types))]
+        for charge, symbolic_number in zip(self.all_charges, self.all_symbolic_numbers):
+            atomic_types_charges[symbolic_number].append(charge)
+        self.atomic_types_charges = array([array(chg, dtype=float) for chg in atomic_types_charges])
+        print(colored("ok\n", "green"))
+
