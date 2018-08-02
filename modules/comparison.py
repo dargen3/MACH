@@ -87,8 +87,8 @@ class Comparison:
                                                                      mean([x[2] for x in molecules_statistical_data]),
                                                                      mean([x[3] for x in molecules_statistical_data]),
                                                                      self.ref_set_of_molecules.num_of_molecules]],
-                                                              headers=["RMSD", "max deviation", "average deviation",
-                                                                       "pearson^2", "num. of molecules"]))))
+                                                          headers=["RMSD", "max deviation", "average deviation",
+                                                                   "pearson^2", "num. of molecules"]))))
         print("Statistics for atomic types:\n{}\n".format(tabulate(self.atomic_types_statistical_data,
                                                                    headers=["atomic type", "RMSD", "max deviation",
                                                                             "average deviation", "pearson^2",

@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
+from termcolor import colored
+import warnings
+warnings.filterwarnings("ignore")
 from modules.arguments import load_arguments
 from modules.set_of_molecules import SetOfMolecules
 from modules.calculation import Calculation
 from modules.comparison import Comparison
 from modules.parameterization import Parameterization
 
-from termcolor import colored
 
 if __name__ == '__main__':
     args = load_arguments()
     print(colored("\nMACH is running with mode: {}\n".format(args.mode), "blue"))
-
     if args.mode == "set_of_molecules_info":
         set_of_molecules = SetOfMolecules(args.sdf)
         set_of_molecules.info(args.atomic_types_pattern)
@@ -39,4 +40,3 @@ if __name__ == '__main__':
                    args.charges,
                    args.save_fig,
                    from_file=True)
-

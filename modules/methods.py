@@ -4,7 +4,6 @@ from numba import jit
 import numpy as np
 
 
-
 class Methods:
     def __repr__(self):
         return self.__class__.__name__
@@ -94,7 +93,6 @@ class EEM(Methods):
             index = eem_calculate(molecule.num_of_atoms, kappa, molecule.distance_matrix,
                                   parameters_values, molecule.symbolic_numbers, 0, results, index)
 
-
     def calculate_slow(self, molecule):
         num_of_atoms = len(molecule)
         matrix = np.empty((num_of_atoms + 1, num_of_atoms + 1), dtype=float)
@@ -111,6 +109,7 @@ class EEM(Methods):
         vector[-1] = molecule.formal_charge
         results = np.linalg.solve(matrix, vector)
         return results[:-1]
+
 
 class SFKEEM(Methods):
     pass

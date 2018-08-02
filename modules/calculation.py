@@ -5,7 +5,7 @@ from termcolor import colored
 
 
 def write_charges_to_file(charges, results, set_of_molecules):
-    print("Writing to {}...".format(charges))
+    print("Writing charges to {}...".format(charges))
     with open(charges, "w") as file_with_results:
         count = 0
         for molecule in set_of_molecules:

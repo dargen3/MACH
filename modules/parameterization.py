@@ -39,7 +39,7 @@ def calculate_charges_and_statistical_data(list_of_parameters, method, set_of_mo
         calculated_charges = separate_atomic_type_charges(method.results, method.all_symbolic_numbers, index)
         atomic_types_rmsd.append(rmsd_calculation(calculated_charges, atomic_type_charges))
     greater_rmsd = max(atomic_types_rmsd)
-    print("Total RMSD: " + str(rmsd)[:8] + "     Worst RMSD: " + str(greater_rmsd)[:8], end="\r")
+    print("Total RMSD: {}    Worst RMSD: {}".format(str(rmsd)[:8], str(greater_rmsd)[:8]), end="\r")
     return greater_rmsd + rmsd + sum(atomic_types_rmsd) / len(atomic_types_rmsd)
 
 
@@ -56,8 +56,8 @@ def local_minimization(input_parameters, method, set_of_molecules, bounds):
     return res.fun, res.x
 
 
-
 def write_parameters_to_file(parameters_file, method):
+    print("Writing parameters to {}...".format(parameters_file))
     lines = ["method: {}".format(method),
              "length_type: {}".format(method.length_correction_key),
              "<<global>>"] + \
@@ -74,6 +74,8 @@ def write_parameters_to_file(parameters_file, method):
             ["<<end>>", "\n"]
     with open(parameters_file, "w") as par_file:
         par_file.writelines("\n".join(lines))
+    print(colored("ok\n", "green"))
+
 
 
 class Parameterization:
@@ -112,6 +114,9 @@ class Parameterization:
         print(colored("\033[Kok\n", "green"))
         write_charges_to_file(charges, method.results, set_of_molecules)
         write_parameters_to_file(new_parameters, method)
+
+
+
         atomic_types_charges = {}
         set_of_molecules.atomic_types_charges = {}
         for index, atomic_type_charges in enumerate(method.ref_atomic_types_charges):
@@ -124,4 +129,6 @@ class Parameterization:
             molecule_len = len(molecule)
             chg_molecules.append(MoleculeChg(method.results[index:index + molecule_len]))
             index += molecule_len
+
+
         Comparison(set_of_molecules, (method.results, atomic_types_charges, chg_molecules), save_fig)

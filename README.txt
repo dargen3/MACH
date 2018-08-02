@@ -6,8 +6,6 @@ odkaz na sdf - dat na readme!
 
 jednotlive metody - odkazy - dat na readme!
 
-optimalizace calculation
-
 kontrola zda je file pro stejne moleculyc
 
 
@@ -28,3 +26,5 @@ vypada to skarede
 getsizeof() - chová se divně
 
 write parameters
+
+warnings numpy

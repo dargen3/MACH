@@ -3,6 +3,7 @@ from scipy import spatial
 from sys import exit
 from termcolor import colored
 
+
 class MoleculeChg:
     def __init__(self, charges):
         self.charges = array(charges, dtype=float64)
@@ -44,6 +45,3 @@ class Molecule:
 
     def __len__(self):
         return self.num_of_atoms
-
-
-
