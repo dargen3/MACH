@@ -1,10 +1,10 @@
+from .molecule import Molecule, MoleculeChg
+from .control_order_of_molecules import control_order_of_molecules
 from sys import exit
 from termcolor import colored
-from .molecule import Molecule, MoleculeChg
 from collections import Counter
 from tabulate import tabulate
 from numpy import array, float64
-
 
 
 def sort(a, b):
@@ -25,7 +25,7 @@ class SetOfMolecules:
             with open(file, "r") as sdf:
                 molecules_data = sdf.read()
             if molecules_data[-5:].strip() != "$$$$":
-                exit(colored("{} is not valid sdf file. Last line is not $$$$.".format(sdf.name), "red"))
+                exit(colored("{} is not valid sdf file. Last line is not $$$$.\n".format(sdf.name), "red"))
             molecules_data = [x.splitlines() for x in molecules_data.split("$$$$\n")]
             for molecule_data in molecules_data[:-1]:
                 type_of_sdf_record = molecule_data[3][-5:]
@@ -34,7 +34,7 @@ class SetOfMolecules:
                 elif type_of_sdf_record == "V3000":
                     self.load_sdf_v3000(molecule_data)
                 else:
-                    exit(colored("{} if not valid sdf file.".format(sdf), "red"))
+                    exit(colored("{} if not valid sdf file.\n".format(sdf), "red"))
             self.num_of_molecules = len(self.molecules)
             self.num_of_atoms = sum([len(molecule) for molecule in self.molecules])
             if self.method:
@@ -91,8 +91,7 @@ class SetOfMolecules:
         table = []
         for atom, count in sorted(counter.items()):
             table.append((atom, count, round(count / (self.num_of_atoms / 100), 2)))
-        print("""
-Statistics data from set of molecules from {}
+        print("""Statistics data from set of molecules from {}
 Number of molecules:   {}
 Number of atoms:       {}
 Number of atoms type:  {}\n
@@ -103,11 +102,12 @@ Number of atoms type:  {}\n
         with open(self.file, "r") as charges_file:
             molecules_data = [[line.split() for line in molecule.splitlines()]
                               for molecule in charges_file.read().split("\n\n")[:-1]]
+            self.num_of_molecules = len(molecules_data)
+            self.names = []
             all_charges = []
             atomic_types_charges = {}
-            self.num_of_molecules = 0
             for molecule in molecules_data:
-                self.num_of_molecules += 1
+                self.names.append(molecule[0][0])
                 atomic_symbols = [atom_line[1] for atom_line in molecule[2:]]
                 charges = array([float(atom_line[2]) for atom_line in molecule[2:]])
                 self.molecules.append(MoleculeChg(charges))
@@ -120,6 +120,9 @@ Number of atoms type:  {}\n
             self.atomic_types_charges = atomic_types_charges
 
     def add_charges(self, file):
+        with open(file, "r") as charges_file:
+            names = [data.splitlines()[0] for data in charges_file.read().split("\n\n")[:-1]]
+            control_order_of_molecules(names, [molecule.name for molecule in self.molecules], file, self.file)
         print("Loading charges from {}...".format(file))
         with open(file, "r") as charges_file:
             charges = []
@@ -133,7 +136,7 @@ Number of atoms type:  {}\n
                 charges.extend(molecule_charges)
                 molecule.charges = array(molecule_charges)
         self.all_charges = array(charges, dtype=float64)
-        atomic_types_charges = [[] for x in range(len(self.method.atomic_types))]
+        atomic_types_charges = [[] for _ in range(len(self.method.atomic_types))]
         for charge, symbolic_number in zip(self.all_charges, self.all_symbolic_numbers):
             atomic_types_charges[symbolic_number].append(charge)
         self.atomic_types_charges = array([array(chg, dtype=float) for chg in atomic_types_charges])

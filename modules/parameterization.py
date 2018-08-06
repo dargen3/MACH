@@ -76,7 +76,20 @@ def write_parameters_to_file(parameters_file, method):
         par_file.writelines("\n".join(lines))
     print(colored("ok\n", "green"))
 
-
+def prepare_data_for_comparison(method, set_of_molecules):
+    atomic_types_charges = {}
+    set_of_molecules.atomic_types_charges = {}
+    for index, atomic_type_charges in enumerate(method.ref_atomic_types_charges):
+        atomic_type, asn = method.atomic_types[index], method.all_symbolic_numbers
+        atomic_types_charges[atomic_type] = separate_atomic_type_charges(method.results, asn, index)
+        set_of_molecules.atomic_types_charges[atomic_type] = separate_atomic_type_charges(method.ref_charges, asn, index)
+    chg_molecules = []
+    index = 0
+    for molecule in set_of_molecules.molecules:
+        molecule_len = len(molecule)
+        chg_molecules.append(MoleculeChg(method.results[index:index + molecule_len]))
+        index += molecule_len
+    return atomic_types_charges, chg_molecules
 
 class Parameterization:
     def __init__(self, sdf, ref_charges, method, optimization_method, cpu, parameters, new_parameters, charges, rewriting_with_force, save_fig):
@@ -114,21 +127,6 @@ class Parameterization:
         print(colored("\033[Kok\n", "green"))
         write_charges_to_file(charges, method.results, set_of_molecules)
         write_parameters_to_file(new_parameters, method)
-
-
-
-        atomic_types_charges = {}
-        set_of_molecules.atomic_types_charges = {}
-        for index, atomic_type_charges in enumerate(method.ref_atomic_types_charges):
-            atomic_type, asn = method.atomic_types[index], method.all_symbolic_numbers
-            atomic_types_charges[atomic_type] = separate_atomic_type_charges(method.results, asn, index)
-            set_of_molecules.atomic_types_charges[atomic_type] = separate_atomic_type_charges(method.ref_charges, asn, index)
-        chg_molecules = []
-        index = 0
-        for molecule in set_of_molecules.molecules:
-            molecule_len = len(molecule)
-            chg_molecules.append(MoleculeChg(method.results[index:index + molecule_len]))
-            index += molecule_len
-
-
+        atomic_types_charges, chg_molecules = prepare_data_for_comparison(method, set_of_molecules)
         Comparison(set_of_molecules, (method.results, atomic_types_charges, chg_molecules), save_fig)
+

@@ -1,12 +1,14 @@
 from .control_existing_files import control_existing_files
+from .set_of_molecules import SetOfMolecules
+from .control_order_of_molecules import control_order_of_molecules
 from termcolor import colored
 from numpy import sqrt, mean, max, min, sum, corrcoef
 from scipy.stats import pearsonr
 from tabulate import tabulate
-from .set_of_molecules import SetOfMolecules
 from matplotlib import pyplot as plt, cm
 from sys import exit
 from collections import namedtuple
+
 
 
 def calculate_statistics(ref_charges, charges):
@@ -25,6 +27,8 @@ class Comparison:
                                     (charges_data, True)))
             self.ref_set_of_molecules = SetOfMolecules(ref_charges_data, from_charges_file=True)
             self.set_of_molecules = SetOfMolecules(charges_data, from_charges_file=True)
+            control_order_of_molecules(self.ref_set_of_molecules.names, self.set_of_molecules.names,
+                                       self.ref_set_of_molecules.file, self.set_of_molecules.file)
         else:
             set_of_molecules_nt = namedtuple("set_of_molecules", ("all_charges", "atomic_types_charges", "molecules"))
             self.ref_set_of_molecules = ref_charges_data

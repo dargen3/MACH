@@ -4,7 +4,7 @@ from termcolor import colored
 
 
 def control_existing_files(files_data, rewriting_with_force=False):
-    print("Control of the presence of the files {}... ".format(", ".join([file[0] for file in files_data])))
+    print("Control of presence of files {}... ".format(", ".join([file[0] for file in files_data])))
     exit_status = False
     for file, presence in files_data:
         if not presence and rewriting_with_force:
