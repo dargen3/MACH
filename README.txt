@@ -8,7 +8,7 @@ jednotlive metody - odkazy - dat na readme!
 
 kontrola zda je file pro stejne moleculyc
 
-
+neni doplnena jina vzdalenost než angstremy
 
 
 pořešit:

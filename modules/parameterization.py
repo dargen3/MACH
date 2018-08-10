@@ -31,7 +31,7 @@ def calculate_charges_and_statistical_data(list_of_parameters, method, set_of_mo
     method.parameters_values = list_of_parameters
     try:
         method.calculate(set_of_molecules)
-    except linalg.linalg.LinAlgError:
+    except (linalg.linalg.LinAlgError, ZeroDivisionError):
         return 1000
     rmsd = rmsd_calculation(method.results, method.ref_charges)
     atomic_types_rmsd = []
@@ -108,7 +108,8 @@ class Parameterization:
         method.ref_charges = set_of_molecules.all_charges
         method.ref_atomic_types_charges = set_of_molecules.atomic_types_charges
         method.all_symbolic_numbers = set_of_molecules.all_symbolic_numbers
-        bounds = [(0, 3)] * len(method.parameters_values)
+        method.prepare_symbolic_numbers(set_of_molecules)
+        bounds = [(-2, 4)] * len(method.parameters_values)
         method.load_array_for_results(set_of_molecules.num_of_atoms)
         if optimization_method == "minimization":
             if cpu != 1:

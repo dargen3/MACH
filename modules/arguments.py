@@ -14,7 +14,7 @@ def load_arguments():
     parser.add_argument("--new_parameters", help="File to store new parametes.")
     # metody?? jake
     parser.add_argument("--method", help="Empirical method for calculation partial atomic charges.",
-                        choices=("EEM", "SFKEEM", "QEq"))
+                        choices=("EEM", "SFKEEM", "QEq", "GM"))
     parser.add_argument("--optimization_method", help="Optimization method for parameterization.", choices=("minimization", "guided_minimization"))
     parser.add_argument("--cpu", help="Only for guided minimization.", default=1, type=int)
     parser.add_argument("--atomic_types_pattern",

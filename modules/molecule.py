@@ -1,4 +1,4 @@
-from numpy import array, float64
+from numpy import array, float64, int
 from scipy import spatial
 from sys import exit
 from termcolor import colored
@@ -42,6 +42,9 @@ class Molecule:
                 print(str(dir(VE)))
                 exit(colored("{}\n".format(str(VE)), "red"))
                 # DODELAT!!!!!!!!!! az budeme u netu
+        if str(method) == "GM":
+            self.only_bonds = array([atom for bond in self.bonds for atom in bond[0]], dtype=int) - 1
+
 
     def __len__(self):
         return self.num_of_atoms
