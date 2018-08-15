@@ -30,12 +30,13 @@ class Comparison:
             control_order_of_molecules(self.ref_set_of_molecules.names, self.set_of_molecules.names,
                                        self.ref_set_of_molecules.file, self.set_of_molecules.file)
         else:
-            set_of_molecules_nt = namedtuple("set_of_molecules", ("all_charges", "atomic_types_charges", "molecules"))
+            set_of_molecules_nt = namedtuple("set_of_molecules", ("all_charges", "atomic_types_charges", "molecules", "file"))
             self.ref_set_of_molecules = ref_charges_data
-            self.set_of_molecules = set_of_molecules_nt(charges_data[0], charges_data[1], charges_data[2])
+            self.set_of_molecules = set_of_molecules_nt(*charges_data)
         self.statistics()
         if save_fig:
             self.graphs()
+
 
     def graphs(self):
         fig = plt.figure(figsize=(11, 9))
@@ -83,17 +84,66 @@ class Comparison:
         for ref_molecule, molecule in zip(self.ref_set_of_molecules, self.set_of_molecules.molecules):
             molecules_statistical_data.append(calculate_statistics(ref_molecule.charges, molecule.charges))
         print(colored("ok\n", "green"))
-        print("Statistics for atoms:\n{}\n".format((tabulate([self.all_atoms_data],
-                                                              headers=["RMSD", "max deviation", "average deviation",
-                                                                       "pearson^2", "num. of atoms"]))))
-        print("Statistics for molecules:\n{}\n\n".format((tabulate([[mean([x[0] for x in molecules_statistical_data]),
-                                                                     mean([x[1] for x in molecules_statistical_data]),
-                                                                     mean([x[2] for x in molecules_statistical_data]),
-                                                                     mean([x[3] for x in molecules_statistical_data]),
-                                                                     self.ref_set_of_molecules.num_of_molecules]],
-                                                          headers=["RMSD", "max deviation", "average deviation",
-                                                                   "pearson^2", "num. of molecules"]))))
-        print("Statistics for atomic types:\n{}\n".format(tabulate(self.atomic_types_statistical_data,
-                                                                   headers=["atomic type", "RMSD", "max deviation",
-                                                                            "average deviation", "pearson^2",
-                                                                            "num. of atoms"])))
+        self.summary = """
+Statistics for atoms:
+{}
+
+Statistics for molecules:
+{}
+
+
+Statistics for atomic types:
+{}
+""".format((tabulate([self.all_atoms_data], headers=["RMSD", "max deviation",
+                                                     "average deviation", "pearson^2", "num. of atoms"])),
+           tabulate([[mean([x[0] for x in molecules_statistical_data]), mean([x[1] for x in molecules_statistical_data]),
+                      mean([x[2] for x in molecules_statistical_data]), mean([x[3] for x in molecules_statistical_data]),
+                      self.ref_set_of_molecules.num_of_molecules]], headers=["RMSD", "max deviation", "average deviation",
+                                                                             "pearson^2", "num. of molecules"]),
+           tabulate(self.atomic_types_statistical_data, headers=["atomic type", "RMSD", "max deviation",
+                                                                 "average deviation", "pearson^2", "num. of atoms"]))
+        print(self.summary)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        #
+        #
+        # print("Statistics for atoms:\n{}\n".format((tabulate([self.all_atoms_data],
+        #                                                       headers=["RMSD", "max deviation", "average deviation",
+        #                                                                "pearson^2", "num. of atoms"]))))
+        # print("Statistics for molecules:\n{}\n\n".format((tabulate([[mean([x[0] for x in molecules_statistical_data]),
+        #                                                              mean([x[1] for x in molecules_statistical_data]),
+        #                                                              mean([x[2] for x in molecules_statistical_data]),
+        #                                                              mean([x[3] for x in molecules_statistical_data]),
+        #                                                              self.ref_set_of_molecules.num_of_molecules]],
+        #                                                   headers=["RMSD", "max deviation", "average deviation",
+        #                                                            "pearson^2", "num. of molecules"]))))
+        # print("Statistics for atomic types:\n{}\n".format(tabulate(self.atomic_types_statistical_data,
+        #                                                            headers=["atomic type", "RMSD", "max deviation",
+        #                                                                     "average deviation", "pearson^2",
+        #                                                                     "num. of atoms"])))

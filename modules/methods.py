@@ -179,7 +179,7 @@ def gm_calculate(num_of_atoms, bonds, parameters_keys, parameters_values, all_re
             work_charge = work_charges[x]
             parameter_key = parameters_keys[x]
             work_electronegativies[x] = parameters_values[parameter_key] + parameters_values[parameter_key+1] * work_charge + parameters_values[parameter_key+2] * work_charge ** 2
-        for bond_index in range(len(bonds), 2):
+        for bond_index in range(0, len(bonds), 2):
             atom1, atom2 = bonds[bond_index: bond_index+2]
             if work_electronegativies[atom1] < work_electronegativies[atom2]:
                 chi_plus = parameters_values[parameters_keys[atom1]+3]
@@ -201,5 +201,3 @@ class GM(Methods):
         for molecule in set_of_molecules:
             index = gm_calculate(molecule.num_of_atoms, molecule.only_bonds, molecule.multiplied_symbolic_numbers,
                                  parameters_values, results, index)
-
-

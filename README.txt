@@ -16,7 +16,7 @@ pořešit:
 jaké metody
 
 v molecules dodelat at to hlasí který atom v parametrech chybí! je to divné!
-v set_of_molecules_info : vypadá škaredě hlášení!
+v set_of_molecules_info : vypadá škaredě hlášení! - taky write parameters """
 
 
 statistic_data.append([atomic_type] + statistic(charges)

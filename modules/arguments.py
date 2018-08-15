@@ -6,7 +6,7 @@ def load_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", help="Choice what MACH should do.",
                         required=True,
-                        choices=("set_of_molecules_info", "calculation", "parameterization", "comparison"))
+                        choices=("set_of_molecules_info", "calculation", "parameterization", "comparison", "parameterization_find_args"))
     parser.add_argument("--sdf", help="Sdf file with molecules data.")
     parser.add_argument("--charges", help="File to store calculated charges of file with charges for comparison.")
     parser.add_argument("--ref_charges", help="File with reference charges for comparison.")
@@ -16,7 +16,8 @@ def load_arguments():
     parser.add_argument("--method", help="Empirical method for calculation partial atomic charges.",
                         choices=("EEM", "SFKEEM", "QEq", "GM"))
     parser.add_argument("--optimization_method", help="Optimization method for parameterization.", choices=("minimization", "guided_minimization"))
-    parser.add_argument("--cpu", help="Only for guided minimization.", default=1, type=int)
+    parser.add_argument("--cpu", help="Only for optimization method guided minimization. Define number of used cpu for parameterization.", default=1, type=int)
+    parser.add_argument("--path", help="Only for parameterization_find_args. Define path to files.")
     parser.add_argument("--atomic_types_pattern",
                         help="For mode set_of_molecules_info only. Define atomic types for statistics",
                         choices=("atom", "atom_high_bond"), default="atom_high_bond")
@@ -38,9 +39,14 @@ def load_arguments():
     elif args.mode == "parameterization":
         if args.ref_charges is None or args.method is None \
                 or args.sdf is None or args.parameters is None \
-                or args.new_parameters is None or args.charges is None:
-            parser.error("For parameterization must be choice --ref_charges, --method, --sdf,",
-                         "--parameters, --new_parameters and --charges.")
+                or args.new_parameters is None or args.charges is None or args.optimization_method is None:
+            parser.error("For parameterization must be choice --ref_charges, --method, --sdf, "
+                         "--parameters, --new_parameters, --optimization_method and --charges.")
+
+    if args.mode == "parameterization_find_args":
+        print(args.optimization_method)
+        if args.path is None or args.optimization_method is None:
+            parser.error("For parameterization_find_args must choice --path and --optimization_method.")
 
     if args.mode == "comparison":
         if args.charges is None or args.ref_charges is None:
