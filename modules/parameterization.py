@@ -3,6 +3,7 @@ from .control_existing_files import control_existing_files
 from .calculation import write_charges_to_file
 from .comparison import Comparison
 from .molecule import MoleculeChg
+from .html import write_html
 from importlib import import_module
 from termcolor import colored
 from scipy.optimize import minimize
@@ -16,6 +17,8 @@ from itertools import chain
 from operator import itemgetter
 from datetime import datetime as date
 from datetime import timedelta
+from os.path import basename
+
 
 
 @jit(nopython=True, cache=True)
@@ -58,30 +61,32 @@ def local_minimization(input_parameters, method, set_of_molecules, bounds):
     return res.fun, res.x
 
 
-def write_parameters_to_file(parameters_file, method, set_of_molecules_file, summary, optimization_method, start_time):
+def write_parameters_to_file(parameters_file, method, set_of_molecules_file, summary_statistics, optimization_method, start_time):
     print("Writing parameters to {}...".format(parameters_file))
-    lines = ["method: {}".format(method),
-             "length_type: {}".format(method.length_correction_key),
-             "<<global>>"] + \
-            ["{}: {}".format(key, value) for key, value in method.parameters.items() if key[0].islower()] + \
-            ["<<key>>"] + \
-            [key for key in method.keys] + \
-            ["<<value_symbol>>"] + \
-            [key for key in method.value_symbols] + \
-            ["<<value>>"] + \
-            ["{}  {}".format(atomic_type.replace("~", " "),
-                             "  ".join([str(method.parameters["{}_{}".format(atomic_type, key)])
-                                        for key in method.value_symbols]))
-             for atomic_type in method.atomic_types] + \
-            ["<<end>>\n\n\n\n\n",
-             "Set of molecules: {}".format(set_of_molecules_file),
-             "Date of parameterization: {}".format(start_time.strftime("%Y-%m-%d %H:%M")),
-             "Method of parameterization: {}".format(optimization_method),
-             "Time of parameterization: {}\n\n".format(str(date.now() - start_time)[:-7])]
+    parameters_lines = ["method: {}".format(method),
+                        "length_type: {}".format(method.length_correction_key),
+                        "<<global>>"] + \
+                       ["{}: {}".format(key, value) for key, value in method.parameters.items() if key[0].islower()] + \
+                       ["<<key>>"] + \
+                       [key for key in method.keys] + \
+                       ["<<value_symbol>>"] + \
+                       [key for key in method.value_symbols] + \
+                       ["<<value>>"] + \
+                       ["{}  {}".format(atomic_type.replace("~", " "),
+                                        "  ".join([str(method.parameters["{}_{}".format(atomic_type, key)])
+                                                   for key in method.value_symbols]))
+                        for atomic_type in method.atomic_types] + ["<<end>>"]
+    summary_lines = ["Set of molecules: {}".format(set_of_molecules_file),
+                     "Method: {}".format(method),
+                     "Optimization method: {}".format(optimization_method),
+                     "Date of parameterization: {}".format(start_time.strftime("%Y-%m-%d %H:%M")),
+                     "Time of parameterization: {}\n\n".format(str(date.now() - start_time)[:-7])]
     with open(parameters_file, "w") as par_file:
-        par_file.writelines("\n".join(lines))
-        par_file.write(summary)
+        par_file.writelines("\n".join(parameters_lines) + "\n\n\n")
+        par_file.writelines("\n".join(summary_lines))
+        par_file.write(summary_statistics)
     print(colored("ok\n", "green"))
+    return summary_lines, parameters_lines
 
 def prepare_data_for_comparison(method, set_of_molecules):
     atomic_types_charges = {}
@@ -137,5 +142,5 @@ class Parameterization:
         write_charges_to_file(charges, method.results, set_of_molecules)
         atomic_types_charges, chg_molecules = prepare_data_for_comparison(method, set_of_molecules)
         comparison = Comparison(set_of_molecules, (method.results, atomic_types_charges, chg_molecules, charges), save_fig)
-        write_parameters_to_file(new_parameters, method, set_of_molecules.file, comparison.summary, optimization_method, start_time)
-
+        summary_lines, parameters_lines = write_parameters_to_file(new_parameters, method, set_of_molecules.file, comparison.summary_statistics, optimization_method, start_time)
+        write_html("{}_{}.html".format(basename(set_of_molecules.file)[:-4], method), summary_lines, parameters_lines, comparison)

@@ -1,6 +1,7 @@
 from .parameterization import Parameterization
 from glob import glob
 from sys import exit
+from os.path import basename
 from termcolor import colored
 
 def parameterization_find_args(path, optimization_method, cpu, rewriting_with_force, save_fig):
@@ -13,10 +14,10 @@ def parameterization_find_args(path, optimization_method, cpu, rewriting_with_fo
     print(colored("ok\n", "green"))
     sdf_file = sdf_files[0]
     par_file = par_files[0]
-    new_par_file = par_file.split("/")[-1]
+    new_par_file = basename(par_file)
     method = par_file.split("_")[-2]
     ref_charges = "{}.chg".format(sdf_file[:-4])
-    charges = "{}_{}.chg".format(sdf_file.split("/")[-1][:-4], method)
+    charges = "{}_{}.chg".format(basename(sdf_file)[:-4], method)
     Parameterization(sdf_file,
                      ref_charges,
                      method,
