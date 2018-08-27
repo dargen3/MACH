@@ -6,11 +6,17 @@ from math import erf
 
 
 class Methods:
+    def control_parameters(self, file):
+        missing_atoms_in_parameters = [self.atomic_types[sym_num] for sym_num in range(len(self.atomic_types)) if sym_num not in self.all_symbolic_numbers]
+        if missing_atoms_in_parameters:
+            exit(colored("No {} atoms in {}. Parameterization is not possible.".format(", ".join(missing_atoms_in_parameters), file), "red"))
+
     def __repr__(self):
         return self.__class__.__name__
 
-    def prepare_symbolic_numbers(self, set_of_molecules):
+    def create_method_data(self, set_of_molecules):
         for molecule in set_of_molecules:
+            molecule.create_method_data(self)
             molecule.multiplied_symbolic_numbers = molecule.symbolic_numbers * len(self.value_symbols)
 
     def load_parameters(self, parameters_file):
@@ -41,6 +47,7 @@ class Methods:
             for line in parameters_file[3: key_index]:
                 key, value = line.split()
                 self.parameters[key] = float(value)
+            num_of_global = len(self.parameters)
             self.keys = [line for line in parameters_file[key_index + 1: value_symbol_index]]
             self.atomic_types_pattern = "_".join([key for key in self.keys])
             self.value_symbols = [line for line in parameters_file[value_symbol_index + 1: value_index]]
@@ -52,15 +59,11 @@ class Methods:
                     self.atomic_types.append(atomic_type)
                     self.parameters["{}_{}".format(atomic_type, self.value_symbols[x])] = float(atomic_type_data[x + len(self.keys)])
         self.atomic_types = sorted(tuple(set(self.atomic_types)))
-        parameters_values = [0 for _ in range(len(self.parameters))]
-        num_of_global = 1
+        parameters_values = [0 for _ in range(len(self.parameters) - num_of_global)]
         for key, value in self.parameters.items():
             if key[0].isupper():
                 atomic_type, value_symbol = key.split("_")
                 parameters_values[self.atomic_types.index(atomic_type) * len(self.value_symbols) + self.value_symbols.index(value_symbol)] = value
-            else:
-                parameters_values[-num_of_global] = value
-                num_of_global += 1
         self.parameters_values = np.array(parameters_values, dtype=np.float64)
         print(colored("ok\n", "green"))
 
@@ -93,7 +96,7 @@ class EEM(Methods):
         index = 0
         results = self.results
         parameters_values = self.parameters_values
-        kappa = parameters_values[-1]
+        kappa = self.parameters["kappa"]
         for molecule in set_of_molecules:
             index = eem_calculate(molecule.num_of_atoms, kappa, molecule.distance_matrix,
                                   parameters_values, molecule.multiplied_symbolic_numbers, 0, results, index)
@@ -124,7 +127,7 @@ class SFKEEM(Methods):
         index = 0
         results = self.results
         parameters_values = self.parameters_values
-        sigma = parameters_values[-1]
+        sigma = self.parameters["sigma"]
         for molecule in set_of_molecules:
             index = sfkeem_calculate(molecule.num_of_atoms, sigma, parameters_values,
                                      molecule.multiplied_symbolic_numbers, molecule.distance_matrix, 0, results, index)

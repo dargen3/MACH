@@ -104,14 +104,12 @@ def prepare_data_for_comparison(method, set_of_molecules):
     return atomic_types_charges, chg_molecules
 
 def prepare_data_for_parameterization(set_of_molecules, ref_charges, method):
-    for molecule in set_of_molecules:
-        molecule.create_method_data(method)
+    method.create_method_data(set_of_molecules)
     method.all_symbolic_numbers = array([symbolic_number for molecule in set_of_molecules.molecules
                                          for symbolic_number in molecule.symbolic_numbers])
     set_of_molecules.add_charges(ref_charges, len(method.atomic_types), method.all_symbolic_numbers)
     method.ref_charges = set_of_molecules.all_charges
     method.ref_atomic_types_charges = set_of_molecules.atomic_types_charges
-    method.prepare_symbolic_numbers(set_of_molecules)
     method.load_array_for_results(set_of_molecules.num_of_atoms)
 
 class Parameterization:
@@ -122,11 +120,11 @@ class Parameterization:
                                 (parameters, True, "file"),
                                 (data_dir, False, "directory")),
                                rewriting_with_force)
-        self.new_parameters = new_parameters
         method = getattr(import_module("modules.methods"), method)()
         method.load_parameters(parameters)
-        set_of_molecules = SetOfMolecules(sdf, method)
+        set_of_molecules = SetOfMolecules(sdf)
         prepare_data_for_parameterization(set_of_molecules, ref_charges, method)
+        method.control_parameters(set_of_molecules.file)
         print("Parameterizating of charges...")
         bounds = [(-2, 4)] * len(method.parameters_values)
         if optimization_method == "minimization":

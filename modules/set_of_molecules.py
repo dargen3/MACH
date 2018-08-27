@@ -14,14 +14,13 @@ def sort(a, b):
 
 
 class SetOfMolecules:
-    def __init__(self, file, method=None, from_charges_file=False):
+    def __init__(self, file, from_charges_file=False):
         print("Loading of set of molecules from {}...".format(file))
         self.molecules = []
         self.file = file
         if from_charges_file:
             self.set_of_molecules_from_charges_file()
         else:
-            self.method = method
             with open(file, "r") as sdf:
                 molecules_data = sdf.read()
             if molecules_data[-5:].strip() != "$$$$":

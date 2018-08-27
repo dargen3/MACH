@@ -9,14 +9,16 @@ jednotlive metody - odkazy - dat na readme!
 neni doplnena jina vzdalenost než angstremy
 
 
-přebývajcí parametry
-
- 
 rychlejsi delani obrazku
 
-oddelat posledni calculation v parametrizaci
+oddelat poslední parametrizaci
 
 pearson**2
+
+
+meta!!
+
+
 
 
 

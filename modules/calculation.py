@@ -19,13 +19,14 @@ def write_charges_to_file(charges, results, set_of_molecules):
 
 class Calculation:
     def __init__(self, sdf, method, parameters, charges, rewriting_with_force):
-        control_existing_files(((sdf, True),
-                                (parameters, True),
-                                (charges, False)),
+        control_existing_files(((sdf, True, "file"),
+                                (parameters, True, "file"),
+                                (charges, False, "file")),
                                rewriting_with_force)
         method = getattr(import_module("modules.methods"), method)()
         method.load_parameters(parameters)
-        set_of_molecules = SetOfMolecules(sdf, method)
+        set_of_molecules = SetOfMolecules(sdf)
+        method.create_method_data(set_of_molecules)
         print("Calculation of charges... ")
         method.load_array_for_results(set_of_molecules.num_of_atoms)
         method.calculate(set_of_molecules)
