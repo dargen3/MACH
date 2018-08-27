@@ -1,5 +1,5 @@
 from .set_of_molecules import SetOfMolecules
-from .control_existing_files import control_existing_files
+from .control_existing import control_existing_files
 from importlib import import_module
 from termcolor import colored
 

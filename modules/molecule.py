@@ -24,27 +24,21 @@ def create_atom_high_bond(num_of_atoms, bonds, atomic_symbols):
 
 
 class Molecule:
-    def __init__(self, name, num_of_atoms, atomic_symbols, atomic_coordinates, bonds, method=None):
+    def __init__(self, name, num_of_atoms, atomic_symbols, atomic_coordinates, bonds):
         self.name = name
         self.num_of_atoms = num_of_atoms
         self.atomic_symbols = atomic_symbols
         self.atomic_coordinates = array(atomic_coordinates)
         self.bonds = bonds
-        self.atomic_symbols_high_bond = create_atom_high_bond(self.num_of_atoms, self.bonds, self.atomic_symbols)
-        if method:
-            self.distance_matrix = spatial.distance.cdist(self.atomic_coordinates, self.atomic_coordinates)
-            try:
-                if method.atomic_types_pattern == "atom":
-                    self.symbolic_numbers = array([method.atomic_types.index(atomic_type) for atomic_type in self.atomic_symbols])
-                elif method.atomic_types_pattern == "atom_high_bond":
-                    self.symbolic_numbers = array([method.atomic_types.index(atomic_type) for atomic_type in self.atomic_symbols_high_bond])
-            except ValueError as VE:
-                print(str(dir(VE)))
-                exit(colored("{}\n".format(str(VE)), "red"))
-                # DODELAT!!!!!!!!!! az budeme u netu
+
+    def create_method_data(self, method):
+        self.distance_matrix = spatial.distance.cdist(self.atomic_coordinates, self.atomic_coordinates)
+        if method.atomic_types_pattern == "atom":
+            self.symbolic_numbers = array([method.atomic_types.index(atomic_type) for atomic_type in self.atomic_symbols])
+        elif method.atomic_types_pattern == "atom_high_bond":
+            self.symbolic_numbers = array([method.atomic_types.index(atomic_type) for atomic_type in create_atom_high_bond(self.num_of_atoms, self.bonds, self.atomic_symbols)])
         if str(method) == "GM":
             self.only_bonds = array([atom for bond in self.bonds for atom in bond[0]], dtype=int) - 1
-
 
     def __len__(self):
         return self.num_of_atoms

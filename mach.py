@@ -7,7 +7,6 @@ from modules.set_of_molecules import SetOfMolecules
 from modules.calculation import Calculation
 from modules.comparison import Comparison
 from modules.parameterization import Parameterization
-
 from modules.parameterization_find_args import parameterization_find_args
 
 
@@ -34,19 +33,19 @@ if __name__ == '__main__':
                          args.parameters,
                          args.new_parameters,
                          args.charges,
-                         args.rewriting_with_force,
-                         args.save_fig)
+                         args.data_dir,
+                         args.rewriting_with_force)
 
     if args.mode == "comparison":
         Comparison(args.ref_charges,
                    args.charges,
-                   args.save_fig,
-                   from_file=True)
+                   args.data_dir,
+                   args.rewriting_with_force)
 
     if args.mode == "parameterization_find_args":
         parameterization_find_args(args.path,
                                    args.optimization_method,
                                    args.cpu,
-                                   args.rewriting_with_force,
-                                   args.save_fig)
+                                   args.data_dir,
+                                   args.rewriting_with_force)
 

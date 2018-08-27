@@ -1,15 +1,14 @@
 from .set_of_molecules import SetOfMolecules
-from .control_existing_files import control_existing_files
+from .control_existing import control_existing_files
 from .calculation import write_charges_to_file
 from .comparison import Comparison
 from .molecule import MoleculeChg
-from .html import write_html
 from importlib import import_module
 from termcolor import colored
 from scipy.optimize import minimize
 from numba import jit
 from sys import exit
-from numpy import sum, sqrt, abs, max, array_split, linalg
+from numpy import sum, sqrt, abs, max, array_split, linalg, array
 from pyDOE import lhs
 from functools import partial
 from multiprocessing import Pool
@@ -17,7 +16,8 @@ from itertools import chain
 from operator import itemgetter
 from datetime import datetime as date
 from datetime import timedelta
-from os.path import basename
+from os import path
+from shutil import copyfile
 
 
 
@@ -49,10 +49,10 @@ def calculate_charges_and_statistical_data(list_of_parameters, method, set_of_mo
 
 
 def calculate_charges_for_set_of_parameters(set_of_parameters, method, set_of_molecules):
-    calculated_data_parameters = []
+    results = []
     for parameters in set_of_parameters:
-        calculated_data_parameters.append((calculate_charges_and_statistical_data(parameters, method, set_of_molecules), tuple(parameters)))
-    return calculated_data_parameters
+        results.append((calculate_charges_and_statistical_data(parameters, method, set_of_molecules), tuple(parameters)))
+    return results
 
 
 def local_minimization(input_parameters, method, set_of_molecules, bounds):
@@ -103,27 +103,32 @@ def prepare_data_for_comparison(method, set_of_molecules):
         index += molecule_len
     return atomic_types_charges, chg_molecules
 
+def prepare_data_for_parameterization(set_of_molecules, ref_charges, method):
+    for molecule in set_of_molecules:
+        molecule.create_method_data(method)
+    method.all_symbolic_numbers = array([symbolic_number for molecule in set_of_molecules.molecules
+                                         for symbolic_number in molecule.symbolic_numbers])
+    set_of_molecules.add_charges(ref_charges, len(method.atomic_types), method.all_symbolic_numbers)
+    method.ref_charges = set_of_molecules.all_charges
+    method.ref_atomic_types_charges = set_of_molecules.atomic_types_charges
+    method.prepare_symbolic_numbers(set_of_molecules)
+    method.load_array_for_results(set_of_molecules.num_of_atoms)
+
 class Parameterization:
-    def __init__(self, sdf, ref_charges, method, optimization_method, cpu, parameters, new_parameters, charges, rewriting_with_force, save_fig):
+    def __init__(self, sdf, ref_charges, method, optimization_method, cpu, parameters, new_parameters, charges, data_dir, rewriting_with_force):
         start_time = date.now()
-        control_existing_files(((sdf, True),
-                                (ref_charges, True),
-                                (parameters, True),
-                                (new_parameters, False),
-                                (charges, False)),
+        control_existing_files(((sdf, True, "file"),
+                                (ref_charges, True, "file"),
+                                (parameters, True, "file"),
+                                (data_dir, False, "directory")),
                                rewriting_with_force)
         self.new_parameters = new_parameters
         method = getattr(import_module("modules.methods"), method)()
         method.load_parameters(parameters)
         set_of_molecules = SetOfMolecules(sdf, method)
-        set_of_molecules.add_charges(ref_charges)
+        prepare_data_for_parameterization(set_of_molecules, ref_charges, method)
         print("Parameterizating of charges...")
-        method.ref_charges = set_of_molecules.all_charges
-        method.ref_atomic_types_charges = set_of_molecules.atomic_types_charges
-        method.all_symbolic_numbers = set_of_molecules.all_symbolic_numbers
-        method.prepare_symbolic_numbers(set_of_molecules)
         bounds = [(-2, 4)] * len(method.parameters_values)
-        method.load_array_for_results(set_of_molecules.num_of_atoms)
         if optimization_method == "minimization":
             if cpu != 1:
                 exit(colored("Local minimization can not be parallelized!", "red"))
@@ -139,8 +144,10 @@ class Parameterization:
         method.parameters_values = final_parameters
         method.calculate(set_of_molecules)
         print(colored("\033[Kok\n", "green"))
-        write_charges_to_file(charges, method.results, set_of_molecules)
         atomic_types_charges, chg_molecules = prepare_data_for_comparison(method, set_of_molecules)
-        comparison = Comparison(set_of_molecules, (method.results, atomic_types_charges, chg_molecules, charges), save_fig)
-        summary_lines, parameters_lines = write_parameters_to_file(new_parameters, method, set_of_molecules.file, comparison.summary_statistics, optimization_method, start_time)
-        write_html("{}_{}.html".format(basename(set_of_molecules.file)[:-4], method), summary_lines, parameters_lines, comparison)
+        comparison = Comparison(set_of_molecules, (method.results, atomic_types_charges, chg_molecules, charges), data_dir, parameterization=True)
+        copyfile(sdf, path.join(data_dir, path.basename(sdf)))
+        copyfile(ref_charges, path.join(data_dir, path.basename(ref_charges)))
+        write_charges_to_file(path.join(data_dir, charges), method.results, set_of_molecules)
+        summary_lines, parameters_lines = write_parameters_to_file(path.join(data_dir, new_parameters), method, set_of_molecules.file, comparison.summary_statistics, optimization_method, start_time)
+        comparison.write_html(path.join(data_dir, "{}_{}.html".format(path.basename(sdf)[:-4], method)), path.basename(sdf), charges, new_parameters, path.basename(ref_charges), summary_lines, parameters_lines)

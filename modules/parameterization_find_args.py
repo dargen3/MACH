@@ -4,7 +4,7 @@ from sys import exit
 from os.path import basename
 from termcolor import colored
 
-def parameterization_find_args(path, optimization_method, cpu, rewriting_with_force, save_fig):
+def parameterization_find_args(path, optimization_method, cpu, data_dir, rewriting_with_force):
     print("Control path...")
     sdf_files = glob("{}*.sdf".format(path))
     par_files = glob("{}*.par".format(path))
@@ -26,5 +26,5 @@ def parameterization_find_args(path, optimization_method, cpu, rewriting_with_fo
                      par_file,
                      new_par_file,
                      charges,
-                     rewriting_with_force,
-                     save_fig)
+                     data_dir,
+                     rewriting_with_force)

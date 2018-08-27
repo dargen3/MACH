@@ -37,9 +37,6 @@ class SetOfMolecules:
                     exit(colored("{} if not valid sdf file.\n".format(sdf), "red"))
             self.num_of_molecules = len(self.molecules)
             self.num_of_atoms = sum([len(molecule) for molecule in self.molecules])
-            if self.method:
-                self.all_symbolic_numbers = array([symbolic_number for molecule in self.molecules
-                                                   for symbolic_number in molecule.symbolic_numbers])
         print(colored("ok\n", "green"))
 
     def load_sdf_v2000(self, molecular_data):
@@ -54,7 +51,7 @@ class SetOfMolecules:
             atomic_symbols.append(line[3])
         for bond_line in molecular_data[num_of_atoms + 4: num_of_atoms + num_of_bonds + 4]:
             bonds.append((sort(int(bond_line[:3]), int(bond_line[3:6])), int(bond_line[8])))
-        self.molecules.append(Molecule(name, num_of_atoms, atomic_symbols, atomic_coordinates, bonds, method=self.method))
+        self.molecules.append(Molecule(name, num_of_atoms, atomic_symbols, atomic_coordinates, bonds))
 
     def load_sdf_v3000(self, molecular_data):
         name = molecular_data[0]
@@ -69,7 +66,7 @@ class SetOfMolecules:
         for bond_line in molecular_data[num_of_atoms + 9: num_of_atoms + num_of_bonds + 9]:
             line = bond_line.split()
             bonds.append((sort(int(line[4]), int(line[5])), int(line[3])))
-        self.molecules.append(Molecule(name, num_of_atoms, atomic_symbols, atomic_coordinates, bonds, method=self.method))
+        self.molecules.append(Molecule(name, num_of_atoms, atomic_symbols, atomic_coordinates, bonds))
 
     def __len__(self):
         return self.num_of_molecules
@@ -119,7 +116,7 @@ Number of atoms type:  {}\n
             self.all_charges = array(all_charges, dtype=float64)
             self.atomic_types_charges = atomic_types_charges
 
-    def add_charges(self, file):
+    def add_charges(self, file, num_of_atomic_types, all_symbolic_numbers):
         with open(file, "r") as charges_file:
             names = [data.splitlines()[0] for data in charges_file.read().split("\n\n")[:-1]]
             control_order_of_molecules(names, [molecule.name for molecule in self.molecules], file, self.file)
@@ -136,8 +133,8 @@ Number of atoms type:  {}\n
                 charges.extend(molecule_charges)
                 molecule.charges = array(molecule_charges)
         self.all_charges = array(charges, dtype=float64)
-        atomic_types_charges = [[] for _ in range(len(self.method.atomic_types))]
-        for charge, symbolic_number in zip(self.all_charges, self.all_symbolic_numbers):
+        atomic_types_charges = [[] for _ in range(num_of_atomic_types)]
+        for charge, symbolic_number in zip(self.all_charges, all_symbolic_numbers):
             atomic_types_charges[symbolic_number].append(charge)
         self.atomic_types_charges = array([array(chg, dtype=float) for chg in atomic_types_charges])
         print(colored("ok\n", "green"))

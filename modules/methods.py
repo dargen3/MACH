@@ -13,7 +13,6 @@ class Methods:
         for molecule in set_of_molecules:
             molecule.multiplied_symbolic_numbers = molecule.symbolic_numbers * len(self.value_symbols)
 
-
     def load_parameters(self, parameters_file):
         print("Loading of parameters from {}...".format(parameters_file))
         with open(parameters_file, "r") as parameters_file:
