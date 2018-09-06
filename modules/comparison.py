@@ -62,6 +62,7 @@ class Comparison:
         self.graphs()
         
     def graphs(self):
+        plt.switch_backend('agg')
         fig = plt.figure(figsize=(11, 9))
         all_atoms_graph = fig.add_subplot(111)
         colors = cm.tab20.colors

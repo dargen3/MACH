@@ -10,14 +10,9 @@ neni doplnena jina vzdalenost než angstremy
 
 rychlejsi delani obrazku
 
-oddelat poslední parametrizaci
-
 pearson**2
 
 final html!
-
-meta! parameterization
-
 
 vysledky z calculator a mach jsou jine :D
 
@@ -25,6 +20,9 @@ vysledky z calculator a mach jsou jine :D
 
 
 pořešit:
+
+
+oddelat poslední parametrizaci
 
 poděkování metacentrum
 
