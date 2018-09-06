@@ -7,8 +7,9 @@ from modules.set_of_molecules import SetOfMolecules
 from modules.calculation import Calculation
 from modules.comparison import Comparison
 from modules.parameterization import Parameterization
-from modules.parameterization_find_args import parameterization_find_args
-
+from modules.parameterization_find_args import parameterization_find_args  # only for my usage
+from modules.calculation_meta import calculation_meta  # only for my usage
+from modules.parameterization_meta import parameterization_meta
 
 if __name__ == '__main__':
     args = load_arguments()
@@ -42,10 +43,25 @@ if __name__ == '__main__':
                    args.data_dir,
                    args.rewriting_with_force)
 
-    if args.mode == "parameterization_find_args":
+    if args.mode == "parameterization_find_args": # only for my usage
         parameterization_find_args(args.path,
                                    args.optimization_method,
                                    args.cpu,
                                    args.data_dir,
                                    args.rewriting_with_force)
 
+
+    if args.mode == "calculation_meta":  # only for my usage
+        calculation_meta(args.sdf,
+                         args.method,
+                         args.parameters,
+                         args.charges,
+                         args.RAM,
+                         args.walltime)
+
+    if args.mode == "parameterization_meta":  # only for my usage
+        parameterization_meta(args.path,
+                              args.optimization_method,
+                              args.cpu,
+                              args.RAM,
+                              args.walltime)

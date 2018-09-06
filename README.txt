@@ -8,21 +8,28 @@ jednotlive metody - odkazy - dat na readme!
 
 neni doplnena jina vzdalenost než angstremy
 
-
 rychlejsi delani obrazku
 
 oddelat poslední parametrizaci
 
 pearson**2
 
+final html!
 
-meta!!
+meta! parameterization
 
+
+vysledky z calculator a mach jsou jine :D
 
 
 
 
 pořešit:
+
+poděkování metacentrum
+
+scratch, užívám? je potřeba nastavovat velký? Co to je? Meta
+
 chybějící nuly ve statistice
 
 jaké metody
@@ -41,3 +48,5 @@ funkce() backround color
 
 vypisovat statistic když se dělá html?
 
+symetrická matice - solve?
+jak profilovat numba function

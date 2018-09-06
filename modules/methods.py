@@ -71,6 +71,7 @@ class Methods:
         self.results = np.empty(num_of_atoms, dtype=np.float64)
 
 
+
 ##########################################################################################
 @jit(nopython=True, cache=True)
 def eem_calculate(num_of_atoms, kappa, matrix_of_distance, parameters_values, parameters_keys, formal_charge, all_results, index):
@@ -100,7 +101,6 @@ class EEM(Methods):
         for molecule in set_of_molecules:
             index = eem_calculate(molecule.num_of_atoms, kappa, molecule.distance_matrix,
                                   parameters_values, molecule.multiplied_symbolic_numbers, 0, results, index)
-
 
 ##########################################################################################
 @jit(nopython=True, cache=True)
