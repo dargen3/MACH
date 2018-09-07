@@ -7,7 +7,7 @@ def load_arguments():
     parser.add_argument("--mode", help="Choice what MACH should do.",
                         required=True,
                         choices=("set_of_molecules_info", "calculation", "parameterization", "comparison", "parameterization_find_args",
-                                 "calculation_meta", "parameterization_meta"))  # only for my usage
+                                 "calculation_meta", "parameterization_meta", "make_complete_html"))  # only for my usage
     parser.add_argument("--sdf", help="Sdf file with molecules data.")
     parser.add_argument("--charges", help="File to store calculated charges of file with charges for comparison.")
     parser.add_argument("--ref_charges", help="File with reference charges for comparison.")

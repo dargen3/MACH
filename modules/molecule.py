@@ -30,6 +30,8 @@ class Molecule:
         self.atomic_symbols = atomic_symbols
         self.atomic_coordinates = array(atomic_coordinates)
         self.bonds = bonds
+        self.atomic_symbols_high_bond = create_atom_high_bond(self.num_of_atoms, self.bonds, self.atomic_symbols)
+
 
     def create_method_data(self, method):
         self.distance_matrix = spatial.distance.cdist(self.atomic_coordinates, self.atomic_coordinates)
@@ -37,7 +39,7 @@ class Molecule:
             if method.atomic_types_pattern == "atom":
                 self.symbolic_numbers = array([method.atomic_types.index(atomic_type) for atomic_type in self.atomic_symbols])
             elif method.atomic_types_pattern == "atom_high_bond":
-                self.symbolic_numbers = array([method.atomic_types.index(atomic_type) for atomic_type in create_atom_high_bond(self.num_of_atoms, self.bonds, self.atomic_symbols)])
+                self.symbolic_numbers = array([method.atomic_types.index(atomic_type) for atomic_type in self.atomic_symbols_high_bond])
         except ValueError as VE:
             exit(colored("{} atomic type is not defined in parameters.".format(str(VE).split()[0][1:-1]), "red"))
         if str(method) == "GM":

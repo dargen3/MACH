@@ -12,7 +12,8 @@ rychlejsi delani obrazku
 
 pearson**2
 
-final html!
+
+oddělat z set of molecules from charges file
 
 vysledky z calculator a mach jsou jine :D
 
@@ -20,6 +21,12 @@ vysledky z calculator a mach jsou jine :D
 
 
 pořešit:
+
+final_html - až potom má cenu všechno přepočítat 
+
+společný neduh všech metod - cesta?
+
+do statistik i procenta a statistiky vazeb?
 
 
 oddelat poslední parametrizaci

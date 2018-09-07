@@ -12,30 +12,40 @@ def sort(a, b):
         return b, a
     return a, b
 
-
-class SetOfMolecules:
-    def __init__(self, file, from_charges_file=False):
-        print("Loading of set of molecules from {}...".format(file))
+class ArciSet:
+    def __init__(self, file):
         self.molecules = []
         self.file = file
-        if from_charges_file:
-            self.set_of_molecules_from_charges_file()
-        else:
-            with open(file, "r") as sdf:
-                molecules_data = sdf.read()
-            if molecules_data[-5:].strip() != "$$$$":
-                exit(colored("{} is not valid sdf file. Last line is not $$$$.\n".format(sdf.name), "red"))
-            molecules_data = [x.splitlines() for x in molecules_data.split("$$$$\n")]
-            for molecule_data in molecules_data[:-1]:
-                type_of_sdf_record = molecule_data[3][-5:]
-                if type_of_sdf_record == "V2000":
-                    self.load_sdf_v2000(molecule_data)
-                elif type_of_sdf_record == "V3000":
-                    self.load_sdf_v3000(molecule_data)
-                else:
-                    exit(colored("{} if not valid sdf file.\n".format(sdf), "red"))
-            self.num_of_molecules = len(self.molecules)
-            self.num_of_atoms = sum([len(molecule) for molecule in self.molecules])
+    
+    def __len__(self):
+        return self.num_of_molecules
+
+    def __getitem__(self, index):
+        return self.molecules[index]
+
+    def __iter__(self):
+        return iter(self.molecules)
+        
+
+class SetOfMolecules(ArciSet):
+    def __init__(self, file):
+        print("Loading of set of molecules from {}...".format(file))
+        ArciSet.__init__(file)
+        with open(file, "r") as sdf:
+            molecules_data = sdf.read()
+        if molecules_data[-5:].strip() != "$$$$":
+            exit(colored("{} is not valid sdf file. Last line is not $$$$.\n".format(sdf.name), "red"))
+        molecules_data = [x.splitlines() for x in molecules_data.split("$$$$\n")]
+        for molecule_data in molecules_data[:-1]:
+            type_of_sdf_record = molecule_data[3][-5:]
+            if type_of_sdf_record == "V2000":
+                self.load_sdf_v2000(molecule_data)
+            elif type_of_sdf_record == "V3000":
+                self.load_sdf_v3000(molecule_data)
+            else:
+                exit(colored("{} if not valid sdf file.\n".format(sdf), "red"))
+        self.num_of_molecules = len(self.molecules)
+        self.num_of_atoms = sum([len(molecule) for molecule in self.molecules])
         print(colored("ok\n", "green"))
 
     def load_sdf_v2000(self, molecular_data):
@@ -67,16 +77,7 @@ class SetOfMolecules:
             bonds.append((sort(int(line[4]), int(line[5])), int(line[3])))
         self.molecules.append(Molecule(name, num_of_atoms, atomic_symbols, atomic_coordinates, bonds))
 
-    def __len__(self):
-        return self.num_of_molecules
-
-    def __getitem__(self, index):
-        return self.molecules[index]
-
-    def __iter__(self):
-        return iter(self.molecules)
-
-    def info(self, atomic_types_pattern):
+    def info(self, atomic_types_pattern, file=None):  # file only for my usage
         counter = Counter()
         if atomic_types_pattern == "atom":
             for molecule in self.molecules:
@@ -87,33 +88,17 @@ class SetOfMolecules:
         table = []
         for atom, count in sorted(counter.items()):
             table.append((atom, count, round(count / (self.num_of_atoms / 100), 2)))
-        print("""Statistics data from set of molecules from {}
+        data = """Statistics data from set of molecules from {}
 Number of molecules:   {}
 Number of atoms:       {}
 Number of atoms type:  {}\n
 {}\n""".format(self.file, self.num_of_molecules, self.num_of_atoms, len(counter),
-           tabulate(table, headers=["Type", "Number", "%"])))
-
-    def set_of_molecules_from_charges_file(self):
-        with open(self.file, "r") as charges_file:
-            molecules_data = [[line.split() for line in molecule.splitlines()]
-                              for molecule in charges_file.read().split("\n\n")[:-1]]
-            self.num_of_molecules = len(molecules_data)
-            self.names = []
-            all_charges = []
-            atomic_types_charges = {}
-            for molecule in molecules_data:
-                self.names.append(molecule[0][0])
-                atomic_symbols = [atom_line[1] for atom_line in molecule[2:]]
-                charges = array([float(atom_line[2]) for atom_line in molecule[2:]])
-                self.molecules.append(MoleculeChg(charges))
-                for atomic_symbol, charge in zip(atomic_symbols, charges):
-                    atomic_types_charges.setdefault(atomic_symbol, []).append(charge)
-                all_charges.extend(charges)
-            for atomic_symbol, charge in atomic_types_charges.items():
-                atomic_types_charges[atomic_symbol] = array(charge)
-            self.all_charges = array(all_charges, dtype=float64)
-            self.atomic_types_charges = atomic_types_charges
+           tabulate(table, headers=["Type", "Number", "%"]))
+        if file: # only for my usage
+            with open(file, "w") as data_file:
+                data_file.write(data)
+        else:
+            print(data)
 
     def add_charges(self, file, num_of_atomic_types, all_symbolic_numbers):
         with open(file, "r") as charges_file:
@@ -138,3 +123,28 @@ Number of atoms type:  {}\n
         self.atomic_types_charges = array([array(chg, dtype=float) for chg in atomic_types_charges])
         print(colored("ok\n", "green"))
 
+
+class SetOfMoleculesFromChargesFile(ArciSet):
+    def __init__(self, file):
+        print("Loading of set of molecules from {}...".format(file))
+        ArciSet.__init__(file)
+        with open(self.file, "r") as charges_file:
+            molecules_data = [[line.split() for line in molecule.splitlines()]
+                              for molecule in charges_file.read().split("\n\n")[:-1]]
+            self.num_of_molecules = len(molecules_data)
+            self.names = []
+            all_charges = []
+            atomic_types_charges = {}
+            for molecule in molecules_data:
+                self.names.append(molecule[0][0])
+                atomic_symbols = [atom_line[1] for atom_line in molecule[2:]]
+                charges = array([float(atom_line[2]) for atom_line in molecule[2:]])
+                self.molecules.append(MoleculeChg(charges))
+                for atomic_symbol, charge in zip(atomic_symbols, charges):
+                    atomic_types_charges.setdefault(atomic_symbol, []).append(charge)
+                all_charges.extend(charges)
+            for atomic_symbol, charge in atomic_types_charges.items():
+                atomic_types_charges[atomic_symbol] = array(charge)
+            self.all_charges = array(all_charges, dtype=float64)
+            self.atomic_types_charges = atomic_types_charges
+        print(colored("ok\n", "green"))

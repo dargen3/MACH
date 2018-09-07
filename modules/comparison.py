@@ -1,5 +1,5 @@
 from .control_existing import control_existing_files
-from .set_of_molecules import SetOfMolecules
+from .set_of_molecules import SetOfMolecules, SetOfMoleculesFromChargesFile
 from .control_order_of_molecules import control_order_of_molecules
 from termcolor import colored
 from numpy import sqrt, mean, max, min, sum, corrcoef
@@ -39,7 +39,7 @@ def calculate_statistics(ref_charges, charges):
 
 
 class Comparison:
-    def __init__(self, ref_charges_data, charges_data, data_dir, parameterization=False):
+    def __init__(self, ref_charges_data, charges_data, data_dir, rewriting_with_force, parameterization=False):
         self.data_dir = data_dir
         if parameterization:
             set_of_molecules_nt = namedtuple("set_of_molecules", ("all_charges", "atomic_types_charges",
@@ -49,9 +49,10 @@ class Comparison:
         else:
             control_existing_files(((ref_charges_data, True, "file"),
                                     (charges_data, True, "file"),
-                                    (self.data_dir, False, "directory")))
-            self.ref_set_of_molecules = SetOfMolecules(ref_charges_data, from_charges_file=True)
-            self.set_of_molecules = SetOfMolecules(charges_data, from_charges_file=True)
+                                    (self.data_dir, False, "directory")),
+                                   rewriting_with_force)
+            self.ref_set_of_molecules = SetOfMoleculesFromChargesFile(ref_charges_data)
+            self.set_of_molecules = SetOfMoleculesFromChargesFile(charges_data)
             control_order_of_molecules(self.ref_set_of_molecules.names, self.set_of_molecules.names,
                                        self.ref_set_of_molecules.file, self.set_of_molecules.file)
         try:

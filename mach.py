@@ -10,6 +10,7 @@ from modules.parameterization import Parameterization
 from modules.parameterization_find_args import parameterization_find_args  # only for my usage
 from modules.calculation_meta import calculation_meta  # only for my usage
 from modules.parameterization_meta import parameterization_meta
+from modules.make_complete_html import make_complete_html
 
 if __name__ == '__main__':
     args = load_arguments()
@@ -65,3 +66,6 @@ if __name__ == '__main__':
                               args.cpu,
                               args.RAM,
                               args.walltime)
+
+    if args.mode == "make_complete_html":
+        make_complete_html()
