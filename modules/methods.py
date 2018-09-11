@@ -1,23 +1,29 @@
 from sys import exit
 from termcolor import colored
 from numba import jit
-import numpy as np
+from numpy import float64, empty, array, ones, zeros, sqrt, cosh, concatenate, int64
+from numpy.linalg import solve
 from math import erf
 
 
 class Methods:
-    def control_parameters(self, file):
-        missing_atoms_in_parameters = [self.atomic_types[sym_num] for sym_num in range(len(self.atomic_types)) if sym_num not in self.all_symbolic_numbers]
+    def __init__(self):
+        self.necessarily_data = {"EEM": ["distances"]}[str(self)]
+
+    def create_method_data(self, set_of_molecules):
+        set_of_molecules.all_nums_of_atoms = array([molecule.num_of_atoms for molecule in set_of_molecules], dtype=int64)
+        set_of_molecules.all_symbolic_numbers = concatenate([molecule.symbolic_numbers(self) for molecule in set_of_molecules], axis=0)
+        set_of_molecules.multiplied_all_symbolic_numbers = set_of_molecules.all_symbolic_numbers * len(self.value_symbols)
+        for data in self.necessarily_data:
+            setattr(set_of_molecules, "all_" + data, concatenate([getattr(molecule, data)() for molecule in set_of_molecules], axis=0))
+
+    def control_parameters(self, file, all_symbolic_numbers):
+        missing_atoms_in_parameters = [self.atomic_types[sym_num] for sym_num in range(len(self.atomic_types)) if sym_num not in all_symbolic_numbers]
         if missing_atoms_in_parameters:
             exit(colored("No {} atoms in {}. Parameterization is not possible.".format(", ".join(missing_atoms_in_parameters), file), "red"))
 
     def __repr__(self):
         return self.__class__.__name__
-
-    def create_method_data(self, set_of_molecules):
-        for molecule in set_of_molecules:
-            molecule.create_method_data(self)
-            molecule.multiplied_symbolic_numbers = molecule.symbolic_numbers * len(self.value_symbols)
 
     def load_parameters(self, parameters_file):
         print("Loading of parameters from {}...".format(parameters_file))
@@ -46,8 +52,7 @@ class Methods:
             self.parameters = {}
             for line in parameters_file[3: key_index]:
                 key, value = line.split()
-                self.parameters[key] = float(value)
-            num_of_global = len(self.parameters)
+                self.parameters[key] = float64(value)
             self.keys = [line for line in parameters_file[key_index + 1: value_symbol_index]]
             self.atomic_types_pattern = "_".join([key for key in self.keys])
             self.value_symbols = [line for line in parameters_file[value_symbol_index + 1: value_index]]
@@ -59,66 +64,78 @@ class Methods:
                     self.atomic_types.append(atomic_type)
                     self.parameters["{}_{}".format(atomic_type, self.value_symbols[x])] = float(atomic_type_data[x + len(self.keys)])
         self.atomic_types = sorted(tuple(set(self.atomic_types)))
-        parameters_values = [0 for _ in range(len(self.parameters) - num_of_global)]
+        parameters_values = [0 for _ in range(len(self.parameters))]
+        writed_glob_par = 1
         for key, value in self.parameters.items():
             if key[0].isupper():
                 atomic_type, value_symbol = key.split("_")
                 parameters_values[self.atomic_types.index(atomic_type) * len(self.value_symbols) + self.value_symbols.index(value_symbol)] = value
-        self.parameters_values = np.array(parameters_values, dtype=np.float64)
+            else:
+                parameters_values[-1] = value
+                writed_glob_par += 1
+        self.parameters_values = array(parameters_values, dtype=float64)
         print(colored("ok\n", "green"))
 
-    def load_array_for_results(self, num_of_atoms):
-        self.results = np.empty(num_of_atoms, dtype=np.float64)
-
-
-
-##########################################################################################
+#####################################################################
 @jit(nopython=True, cache=True)
-def eem_calculate(num_of_atoms, kappa, matrix_of_distance, parameters_values, parameters_keys, formal_charge, all_results, index):
-    num_of_atoms_add_1 = num_of_atoms + 1
-    matrix = np.empty((num_of_atoms_add_1, num_of_atoms_add_1), dtype=np.float64)
-    vector = np.empty(num_of_atoms_add_1, dtype=np.float64)
-    matrix[:num_of_atoms, :num_of_atoms] = kappa / matrix_of_distance
-    matrix[num_of_atoms, :] = 1.0
-    matrix[:, num_of_atoms] = 1.0
-    matrix[num_of_atoms, num_of_atoms] = 0.0
-    for i in range(num_of_atoms):
-        symbol = parameters_keys[i]
-        matrix[i][i] = parameters_values[symbol + 1]
-        vector[i] = -parameters_values[symbol]
-    vector[-1] = formal_charge
-    index_num_of_atoms = index + num_of_atoms
-    all_results[index: index_num_of_atoms] = np.linalg.solve(matrix, vector)[:-1]
-    return index_num_of_atoms
+def eem_calculate(distances, symbols, nums_of_atoms, parameters_values):
+    results = empty(symbols.size, dtype=float64)
+    kappa = parameters_values[-1]
+    formal_charge = 0
+    index = 0
+    counter_distance = 0
+    counter_symbols = 0
+    for num_of_atoms in nums_of_atoms:
+        new_index = index + num_of_atoms
+        num_of_atoms_add_1 = num_of_atoms + 1
+        matrix = empty((num_of_atoms_add_1, num_of_atoms_add_1), dtype=float64)
+        vector = empty(num_of_atoms_add_1, dtype=float64)
+        for x in range(num_of_atoms):
+            matrix[num_of_atoms][x] = matrix[x][num_of_atoms] = 1.0
+            symbol = symbols[counter_symbols]
+            counter_symbols += 1
+            matrix[x][x] = parameters_values[symbol + 1]
+            vector[x] = -parameters_values[symbol]
+            for y in range(x+1, num_of_atoms):
+                matrix[x][y] = matrix[y][x] = kappa / distances[counter_distance]
+                counter_distance += 1
+        matrix[num_of_atoms, num_of_atoms] = 0.0
+        vector[-1] = formal_charge
+        results[index: new_index] = solve(matrix, vector)[:-1]
+        index = new_index
+    return results
 
 
 class EEM(Methods):
     def calculate(self, set_of_molecules):
-        index = 0
-        results = self.results
-        parameters_values = self.parameters_values
-        kappa = self.parameters["kappa"]
-        for molecule in set_of_molecules:
-            index = eem_calculate(molecule.num_of_atoms, kappa, molecule.distance_matrix,
-                                  parameters_values, molecule.multiplied_symbolic_numbers, 0, results, index)
+        self.results = eem_calculate(set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers,
+                                     set_of_molecules.all_nums_of_atoms, self.parameters_values)
 
 ##########################################################################################
+
+
 @jit(nopython=True, cache=True)
-def sfkeem_calculate(num_of_atoms, sigma, parameters_values, parameters_keys, matrix_of_distance, formal_charge, all_results, index):
+def sfkeem_calculate(parameters_values, parameters_keys, distance_matrix, formal_charge, all_results, index):
+    sigma = parameters_values[-1]
+    num_of_atoms = parameters_keys.size
     num_of_atoms_add_1 = num_of_atoms + 1
-    matrix = np.ones((num_of_atoms_add_1, num_of_atoms_add_1), dtype=np.float64)
-    vector = np.empty(num_of_atoms_add_1, dtype=np.float64)
+    matrix = ones((num_of_atoms_add_1, num_of_atoms_add_1), dtype=float64)
+    vector = empty(num_of_atoms_add_1, dtype=float64)
     for x in range(num_of_atoms):
         symbol = parameters_keys[x]
         value = parameters_values[symbol + 1]
-        matrix[x, :-1] = matrix[x, :-1] * value
-        matrix[:-1, x] = matrix[:-1, x] * value
+        for y in range(num_of_atoms):
+            matrix[x][y] = matrix[x][y] * value
+            matrix[y][x] = matrix[y][x] * value
         vector[x] = - parameters_values[symbol]
-    matrix[:num_of_atoms, :num_of_atoms] = 2.0 * np.sqrt(matrix[:num_of_atoms, :num_of_atoms]) * 1 / np.cosh(matrix_of_distance * sigma)
+    for x in range(num_of_atoms):
+        for y in range(x+1, num_of_atoms):
+            matrix[x][y] = matrix[y][x] = 2.0 * sqrt(matrix[x][y]) * 1.0 / cosh(distance_matrix[x][y] * sigma)
+        matrix[x][x] = 2.0 * sqrt(matrix[x][x]) * 1.0 / cosh(distance_matrix[x][x] * sigma)
     vector[-1] = formal_charge
     matrix[num_of_atoms, num_of_atoms] = 0.0
     index_num_of_atoms = index + num_of_atoms
-    all_results[index: index_num_of_atoms] = np.linalg.solve(matrix, vector)[:-1]
+    all_results[index: index_num_of_atoms] = solve(matrix, vector)[:-1]
     return index_num_of_atoms
 
 
@@ -127,25 +144,23 @@ class SFKEEM(Methods):
         index = 0
         results = self.results
         parameters_values = self.parameters_values
-        sigma = self.parameters["sigma"]
         for molecule in set_of_molecules:
-            index = sfkeem_calculate(molecule.num_of_atoms, sigma, parameters_values,
-                                     molecule.multiplied_symbolic_numbers, molecule.distance_matrix, 0, results, index)
+            index = sfkeem_calculate(parameters_values, molecule.multiplied_symbolic_numbers, molecule.distance_matrix, 0, results, index)
 
 
 ##########################################################################################
 @jit(nopython=True, cache=True)
-def qeq_calculate(num_of_atoms, matrix_of_distance, parameters_keys, parameters_values, formal_charge, all_results, index):
+def qeq_calculate(distance_matrix, parameters_keys, parameters_values, formal_charge, all_results, index):
+    num_of_atoms = parameters_keys.size
     num_of_atoms_add_1 = num_of_atoms + 1
-    matrix = np.empty((num_of_atoms_add_1, num_of_atoms_add_1), dtype=np.float64)
-    vector = np.empty(num_of_atoms_add_1, dtype=np.float64)
-    matrix[:num_of_atoms, :num_of_atoms] = matrix_of_distance
-    matrix[num_of_atoms, :] = 1.0
-    matrix[:, num_of_atoms] = 1.0
+    matrix = empty((num_of_atoms_add_1, num_of_atoms_add_1), dtype=float64)
+    vector = empty(num_of_atoms_add_1, dtype=float64)
     matrix[num_of_atoms, num_of_atoms] = 0.0
-    vector_rad = np.empty(num_of_atoms, dtype=np.float64)
+    vector_rad = empty(num_of_atoms, dtype=float64)
     for x in range(num_of_atoms):
         vector_rad[x] = parameters_values[parameters_keys[x] + 2]
+        matrix[x][num_of_atoms] = 1.0
+        matrix[num_of_atoms][x] = 1.0
     for i in range(num_of_atoms):
         symbol = parameters_keys[i]
         matrix[i][i] = parameters_values[symbol + 1]
@@ -153,11 +168,11 @@ def qeq_calculate(num_of_atoms, matrix_of_distance, parameters_keys, parameters_
         for j in range(i + 1, num_of_atoms):
             rad1 = vector_rad[i]
             rad2 = vector_rad[j]
-            distance = matrix_of_distance[i][j]
-            matrix[i][j] = matrix[j][i] = erf(np.sqrt(rad1 * rad2 / (rad1 + rad2)) * distance) / distance
+            distance = distance_matrix[i][j]
+            matrix[i][j] = matrix[j][i] = erf(sqrt(rad1 * rad2 / (rad1 + rad2)) * distance) / distance
     vector[-1] = formal_charge
     index_num_of_atoms = index + num_of_atoms
-    all_results[index: index_num_of_atoms] = np.linalg.solve(matrix, vector)[:-1]
+    all_results[index: index_num_of_atoms] = solve(matrix, vector)[:-1]
     return index_num_of_atoms
 
 
@@ -167,15 +182,31 @@ class QEq(Methods):
         results = self.results
         parameters_values = self.parameters_values
         for molecule in set_of_molecules:
-            index = qeq_calculate(molecule.num_of_atoms, molecule.distance_matrix, molecule.multiplied_symbolic_numbers,
+            index = qeq_calculate(molecule.distance_matrix, molecule.multiplied_symbolic_numbers,
                                   parameters_values, 0, results, index)
+
+        # from time import time
+        # start = time()
+        # for x in range(10):
+        #     index = 0
+        #     results = self.results
+        #     parameters_values = self.parameters_values
+        #     # ccc = self.parameters["correlation"]
+        #     for molecule in set_of_molecules:
+        #         index = qeq_calculate(molecule.distance_matrix,
+        #                               molecule.multiplied_symbolic_numbers,parameters_values, 0, results, index)
+        #
+        # print(time()- start)
+        # from sys import exit
+        # exit()
 
 
 ##########################################################################################
 @jit(nopython=True, cache=True)
-def gm_calculate(num_of_atoms, bonds, parameters_keys, parameters_values, all_results, index):
-    work_electronegativies = np.zeros(num_of_atoms, dtype=np.float64)
-    work_charges = np.zeros(num_of_atoms, dtype=np.float64)
+def gm_calculate(bonds, parameters_keys, parameters_values, all_results, index):
+    num_of_atoms = parameters_keys.size
+    work_electronegativies = zeros(num_of_atoms, dtype=float64)
+    work_charges = zeros(num_of_atoms, dtype=float64)
     for alpha in range(4):
         for x in range(num_of_atoms):
             work_charge = work_charges[x]
@@ -201,5 +232,5 @@ class GM(Methods):
         results = self.results
         parameters_values = self.parameters_values
         for molecule in set_of_molecules:
-            index = gm_calculate(molecule.num_of_atoms, molecule.only_bonds, molecule.multiplied_symbolic_numbers,
+            index = gm_calculate(molecule.only_bonds, molecule.multiplied_symbolic_numbers,
                                  parameters_values, results, index)

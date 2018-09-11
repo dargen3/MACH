@@ -4,7 +4,7 @@ from sys import exit
 from termcolor import colored
 from collections import Counter
 from tabulate import tabulate
-from numpy import array, float64
+from numpy import array, float32
 
 
 def sort(a, b):
@@ -16,7 +16,7 @@ class ArciSet:
     def __init__(self, file):
         self.molecules = []
         self.file = file
-    
+
     def __len__(self):
         return self.num_of_molecules
 
@@ -25,12 +25,12 @@ class ArciSet:
 
     def __iter__(self):
         return iter(self.molecules)
-        
+
 
 class SetOfMolecules(ArciSet):
     def __init__(self, file):
         print("Loading of set of molecules from {}...".format(file))
-        ArciSet.__init__(file)
+        super().__init__(file)
         with open(file, "r") as sdf:
             molecules_data = sdf.read()
         if molecules_data[-5:].strip() != "$$$$":
@@ -100,7 +100,7 @@ Number of atoms type:  {}\n
         else:
             print(data)
 
-    def add_charges(self, file, num_of_atomic_types, all_symbolic_numbers):
+    def add_ref_charges(self, file, num_of_atomic_types, all_symbolic_numbers):
         with open(file, "r") as charges_file:
             names = [data.splitlines()[0] for data in charges_file.read().split("\n\n")[:-1]]
             control_order_of_molecules(names, [molecule.name for molecule in self.molecules], file, self.file)
@@ -116,18 +116,18 @@ Number of atoms type:  {}\n
                         pass
                 charges.extend(molecule_charges)
                 molecule.charges = array(molecule_charges)
-        self.all_charges = array(charges, dtype=float64)
+        self.ref_charges = array(charges, dtype=float32)
         atomic_types_charges = [[] for _ in range(num_of_atomic_types)]
-        for charge, symbolic_number in zip(self.all_charges, all_symbolic_numbers):
+        for charge, symbolic_number in zip(self.ref_charges, all_symbolic_numbers):
             atomic_types_charges[symbolic_number].append(charge)
-        self.atomic_types_charges = array([array(chg, dtype=float) for chg in atomic_types_charges])
+        self.ref_atomic_types_charges = array([array(chg, dtype=float32) for chg in atomic_types_charges])
         print(colored("ok\n", "green"))
 
 
 class SetOfMoleculesFromChargesFile(ArciSet):
     def __init__(self, file):
         print("Loading of set of molecules from {}...".format(file))
-        ArciSet.__init__(file)
+        super().__init__(file)
         with open(self.file, "r") as charges_file:
             molecules_data = [[line.split() for line in molecule.splitlines()]
                               for molecule in charges_file.read().split("\n\n")[:-1]]
@@ -145,6 +145,6 @@ class SetOfMoleculesFromChargesFile(ArciSet):
                 all_charges.extend(charges)
             for atomic_symbol, charge in atomic_types_charges.items():
                 atomic_types_charges[atomic_symbol] = array(charge)
-            self.all_charges = array(all_charges, dtype=float64)
+            self.all_charges = array(all_charges, dtype=float32)
             self.atomic_types_charges = atomic_types_charges
         print(colored("ok\n", "green"))

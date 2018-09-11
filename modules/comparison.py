@@ -101,7 +101,7 @@ class Comparison:
 
     def statistics(self):
         print("Calculating statistical data...")
-        self.all_atoms_data = [round(item, 4) for item in calculate_statistics(self.ref_set_of_molecules.all_charges,
+        self.all_atoms_data = [round(item, 4) for item in calculate_statistics(self.ref_set_of_molecules.ref_charges,
                                                                                self.set_of_molecules.all_charges)]
         self.atomic_types_data = []
         for (atomic_type, ref_charges), (_, charges) in zip(self.ref_set_of_molecules.atomic_types_charges.items(),

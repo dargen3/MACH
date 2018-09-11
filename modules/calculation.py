@@ -28,7 +28,6 @@ class Calculation:
         set_of_molecules = SetOfMolecules(sdf)
         method.create_method_data(set_of_molecules)
         print("Calculation of charges... ")
-        method.load_array_for_results(set_of_molecules.num_of_atoms)
         method.calculate(set_of_molecules)
         print(colored("ok\n", "green"))
         write_charges_to_file(charges, method.results, set_of_molecules)

@@ -20,34 +20,6 @@ from os import path
 from shutil import copyfile
 
 
-
-@jit(nopython=True, cache=True)
-def rmsd_calculation(results, right_charges):
-    deviations = abs(results - right_charges)**2
-    return sqrt((1.0 / deviations.size) * sum(deviations))
-
-
-@jit(nopython=True, cache=True)
-def separate_atomic_type_charges(charges, symbolic_numbers, atomic_type_symbolic_number):
-    return charges[symbolic_numbers == atomic_type_symbolic_number]
-
-
-def calculate_charges_and_statistical_data(list_of_parameters, method, set_of_molecules):
-    method.parameters_values = list_of_parameters
-    try:
-        method.calculate(set_of_molecules)
-    except (linalg.linalg.LinAlgError, ZeroDivisionError):
-        return 1000
-    rmsd = rmsd_calculation(method.results, method.ref_charges)
-    atomic_types_rmsd = []
-    for index, atomic_type_charges in enumerate(method.ref_atomic_types_charges):
-        calculated_charges = separate_atomic_type_charges(method.results, method.all_symbolic_numbers, index)
-        atomic_types_rmsd.append(rmsd_calculation(calculated_charges, atomic_type_charges))
-    greater_rmsd = max(atomic_types_rmsd)
-    print("Total RMSD: {}    Worst RMSD: {}".format(str(rmsd)[:8], str(greater_rmsd)[:8]), end="\r")
-    return greater_rmsd + rmsd + sum(atomic_types_rmsd) / len(atomic_types_rmsd)
-
-
 def calculate_charges_for_set_of_parameters(set_of_parameters, method, set_of_molecules):
     results = []
     for parameters in set_of_parameters:
@@ -91,10 +63,10 @@ def write_parameters_to_file(parameters_file, method, set_of_molecules_file, sum
 def prepare_data_for_comparison(method, set_of_molecules):
     atomic_types_charges = {}
     set_of_molecules.atomic_types_charges = {}
-    for index, atomic_type_charges in enumerate(method.ref_atomic_types_charges):
-        atomic_type, asn = method.atomic_types[index], method.all_symbolic_numbers
+    for index, atomic_type_charges in enumerate(set_of_molecules.ref_atomic_types_charges):
+        atomic_type, asn = method.atomic_types[index], set_of_molecules.all_symbolic_numbers
         atomic_types_charges[atomic_type] = separate_atomic_type_charges(method.results, asn, index)
-        set_of_molecules.atomic_types_charges[atomic_type] = separate_atomic_type_charges(method.ref_charges, asn, index)
+        set_of_molecules.atomic_types_charges[atomic_type] = separate_atomic_type_charges(set_of_molecules.ref_charges, asn, index)
     chg_molecules = []
     index = 0
     for molecule in set_of_molecules.molecules:
@@ -105,12 +77,35 @@ def prepare_data_for_comparison(method, set_of_molecules):
 
 def prepare_data_for_parameterization(set_of_molecules, ref_charges, method):
     method.create_method_data(set_of_molecules)
-    method.all_symbolic_numbers = array([symbolic_number for molecule in set_of_molecules.molecules
-                                         for symbolic_number in molecule.symbolic_numbers])
-    set_of_molecules.add_charges(ref_charges, len(method.atomic_types), method.all_symbolic_numbers)
-    method.ref_charges = set_of_molecules.all_charges
-    method.ref_atomic_types_charges = set_of_molecules.atomic_types_charges
-    method.load_array_for_results(set_of_molecules.num_of_atoms)
+    set_of_molecules.add_ref_charges(ref_charges, len(method.atomic_types), set_of_molecules.all_symbolic_numbers)
+    method.control_parameters(set_of_molecules.file, set_of_molecules.all_symbolic_numbers)
+
+@jit(nopython=True, cache=True)
+def rmsd_calculation(results, right_charges):
+    deviations = abs(results - right_charges)**2
+    return sqrt((1.0 / deviations.size) * sum(deviations))
+
+
+@jit(nopython=True, cache=True)
+def separate_atomic_type_charges(charges, symbolic_numbers, atomic_type_symbolic_number):
+    return charges[symbolic_numbers == atomic_type_symbolic_number]
+
+
+def calculate_charges_and_statistical_data(list_of_parameters, method, set_of_molecules):
+    method.parameters_values = list_of_parameters
+    try:
+        method.calculate(set_of_molecules)
+    except (linalg.linalg.LinAlgError, ZeroDivisionError):
+        return 1000
+    rmsd = rmsd_calculation(method.results, set_of_molecules.ref_charges)
+    atomic_types_rmsd = []
+    for index, atomic_type_charges in enumerate(set_of_molecules.ref_atomic_types_charges):
+        calculated_atomic_types_charges = separate_atomic_type_charges(method.results, set_of_molecules.all_symbolic_numbers, index)
+        atomic_types_rmsd.append(rmsd_calculation(calculated_atomic_types_charges, atomic_type_charges))
+    greater_rmsd = max(atomic_types_rmsd)
+    print("Total RMSD: {}    Worst RMSD: {}".format(str(rmsd)[:8], str(greater_rmsd)[:8]), end="\r")
+    return greater_rmsd + rmsd + sum(atomic_types_rmsd) / len(atomic_types_rmsd)
+
 
 class Parameterization:
     def __init__(self, sdf, ref_charges, method, optimization_method, cpu, parameters, new_parameters, charges, data_dir, rewriting_with_force):
@@ -124,9 +119,8 @@ class Parameterization:
         method.load_parameters(parameters)
         set_of_molecules = SetOfMolecules(sdf)
         prepare_data_for_parameterization(set_of_molecules, ref_charges, method)
-        method.control_parameters(set_of_molecules.file)
         print("Parameterizating of charges...")
-        bounds = [(-2, 4)] * len(method.parameters_values)
+        bounds = [(0.00001, 4)] * len(method.parameters_values)
         if optimization_method == "minimization":
             if cpu != 1:
                 exit(colored("Local minimization can not be parallelized!", "red"))
@@ -143,7 +137,7 @@ class Parameterization:
         method.calculate(set_of_molecules)
         print(colored("\033[Kok\n", "green"))
         atomic_types_charges, chg_molecules = prepare_data_for_comparison(method, set_of_molecules)
-        comparison = Comparison(set_of_molecules, (method.results, atomic_types_charges, chg_molecules, charges), data_dir, parameterization=True)
+        comparison = Comparison(set_of_molecules, (method.results, atomic_types_charges, chg_molecules, charges), data_dir, rewriting_with_force, parameterization=True)
         copyfile(sdf, path.join(data_dir, path.basename(sdf)))
         copyfile(ref_charges, path.join(data_dir, path.basename(ref_charges)))
         write_charges_to_file(path.join(data_dir, charges), method.results, set_of_molecules)
