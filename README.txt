@@ -1,13 +1,21 @@
 
+html - name
+
+vztah časové náročnosti na počet atomů a počet atomových typů
+
+největší molekula, nejmenší, průměr.
+
+do statistik i procenta a statistiky vazeb?
+
+
 
 
 
 
 pro mě:
 
-vztah časové náročnosti na počet atomů a počet atomových typů
+v metodach není zahrnutý formal charge, defaultně je na nule
 
-největší molekula, nejmenší, průměr.
 
 čtení naboju z sdf není hotové ani pro v3 ani pro v2
 
@@ -19,10 +27,14 @@ neni doplnena jina vzdalenost než angstremy
 
 QEq 500 - oddělat cor 
 
-pořešit jestli je v metodách nutné num_of_atom
 
 
 pořešit:
+
+
+ruzne minimalizace?
+
+diff e, least squares?
 
 grafy jak postupovala optimalizace?
 
@@ -31,8 +43,6 @@ rychlejší delani obrazku
 final_html - až potom má cenu všechno přepočítat 
 
 společný neduh všech metod - cesta?
-
-do statistik i procenta a statistiky vazeb?
 
 
 oddelat poslední parametrizaci
@@ -63,20 +73,18 @@ symetrická matice - solve?
 jak profilovat numba function
 
 
-
-float 64 a float 32
-./mach.py --mode parameterization_find_args --path data/EEM/500/ --optimization_method minimization --data_dir asldfjalksdf -f 
+pořešit bounds!
 
 
 
 výsledky: 8000
           old      new
-EEM       1.95     0.33   5.9
-SFKEEM    2.48     0.51   4.9   
-QEq       2.32     0.71   3.3
-GM        5.22     0.08   65
+EEM       1.95     0.31   6.3
+SFKEEM    2.48     0.59   4.2   
+QEq       2.32     0.68   3.4
+GM        5.22     0.06   87
 
-RAM       480MB    260MB     1.9     
+RAM       480MB    250MB     1.9  
 
 
 
@@ -158,10 +166,6 @@ In [7]: %timeit ff(a)
 
 https://numba.pydata.org/numba-doc/dev/user/performance-tips.html
 
-
-
 jak nastavit numpy aby počítalo s nějakou přesností
 
-pořešit bounds!
 
-dopsat diferential evolution

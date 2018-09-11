@@ -5,7 +5,7 @@ from .comparison import Comparison
 from .molecule import MoleculeChg
 from importlib import import_module
 from termcolor import colored
-from scipy.optimize import minimize
+from scipy.optimize import minimize, differential_evolution
 from numba import jit
 from sys import exit
 from numpy import sum, sqrt, abs, max, array_split, linalg, array
@@ -120,7 +120,7 @@ class Parameterization:
         set_of_molecules = SetOfMolecules(sdf)
         prepare_data_for_parameterization(set_of_molecules, ref_charges, method)
         print("Parameterizating of charges...")
-        bounds = [(0.00001, 4)] * len(method.parameters_values)
+        bounds = [(0.00001, 4)] * len(method.parameters_values) # dořesit
         if optimization_method == "minimization":
             if cpu != 1:
                 exit(colored("Local minimization can not be parallelized!", "red"))
@@ -133,6 +133,8 @@ class Parameterization:
             partial_f = partial(local_minimization, method=method, set_of_molecules=set_of_molecules, bounds=bounds)
             with Pool(cpu) as pool:
                 final_parameters = sorted([(result[0], result[1]) for result in pool.map(partial_f, [parameters[1] for parameters in candidates])], key=itemgetter(0))[0][1]
+        elif optimization_method == "differential_evolution":
+            final_parameters = differential_evolution(calculate_charges_and_statistical_data, bounds, args=(method, set_of_molecules))
         method.parameters_values = final_parameters
         method.calculate(set_of_molecules)
         print(colored("\033[Kok\n", "green"))

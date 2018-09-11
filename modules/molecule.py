@@ -44,8 +44,11 @@ class Molecule:
         except ValueError as VE:
             exit(colored("{} atomic type is not defined in parameters.".format(str(VE).split()[0][1:-1]), "red"))
 
-    def bonds_without_type_of_bond(self):
+    def bonds_without_bond_type(self):
         return array([atom for bond in self.bonds for atom in bond[0]], dtype=int64) - 1
+
+    def num_of_bonds_mul_two(self):
+        return array([len(self.bonds)*2], dtype=int64) # domyslet.. je to nanic
 
     def __len__(self):
         return self.num_of_atoms
