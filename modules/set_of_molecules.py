@@ -28,7 +28,7 @@ class ArciSet:
 
 
 class SetOfMolecules(ArciSet):
-    def __init__(self, file):
+    def __init__(self, file, num_of_molecules=None):
         print("Loading of set of molecules from {}...".format(file))
         super().__init__(file)
         with open(file, "r") as sdf:
@@ -36,7 +36,14 @@ class SetOfMolecules(ArciSet):
         if molecules_data[-5:].strip() != "$$$$":
             exit(colored("{} is not valid sdf file. Last line is not $$$$.\n".format(sdf.name), "red"))
         molecules_data = [x.splitlines() for x in molecules_data.split("$$$$\n")]
-        for molecule_data in molecules_data[:-1]:
+        num_of_all_molecules = len(molecules_data) - 1
+        if not num_of_molecules:
+            self.num_of_molecules = num_of_all_molecules
+        else:
+            if num_of_molecules > num_of_all_molecules:
+                exit(colored(("ERROR! Number of molecules is only {}!".format(num_of_all_molecules)), "red"))
+            self.num_of_molecules = num_of_molecules
+        for molecule_data in molecules_data[:self.num_of_molecules]:
             type_of_sdf_record = molecule_data[3][-5:]
             if type_of_sdf_record == "V2000":
                 self.load_sdf_v2000(molecule_data)
@@ -44,7 +51,6 @@ class SetOfMolecules(ArciSet):
                 self.load_sdf_v3000(molecule_data)
             else:
                 exit(colored("{} if not valid sdf file.\n".format(sdf), "red"))
-        self.num_of_molecules = len(self.molecules)
         self.num_of_atoms = sum([len(molecule) for molecule in self.molecules])
         print(colored("ok\n", "green"))
 
@@ -102,7 +108,7 @@ Number of atoms type:  {}\n
 
     def add_ref_charges(self, file, num_of_atomic_types, all_symbolic_numbers):
         with open(file, "r") as charges_file:
-            names = [data.splitlines()[0] for data in charges_file.read().split("\n\n")[:-1]]
+            names = [data.splitlines()[0] for data in charges_file.read().split("\n\n")[:-1]][:self.num_of_molecules]
             control_order_of_molecules(names, [molecule.name for molecule in self.molecules], file, self.file)
         print("Loading charges from {}...".format(file))
         with open(file, "r") as charges_file:

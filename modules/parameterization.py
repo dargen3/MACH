@@ -18,7 +18,7 @@ from datetime import datetime as date
 from datetime import timedelta
 from os import path
 from shutil import copyfile
-
+import nlopt
 
 def calculate_charges_for_set_of_parameters(set_of_parameters, method, set_of_molecules):
     results = []
@@ -31,7 +31,6 @@ def local_minimization(input_parameters, method, set_of_molecules, bounds):
     res = minimize(calculate_charges_and_statistical_data, input_parameters, method="SLSQP", bounds=bounds,
                    args=(method, set_of_molecules))
     return res.fun, res.x
-
 
 def write_parameters_to_file(parameters_file, method, set_of_molecules_file, summary_statistics, optimization_method, start_time):
     print("Writing parameters to {}...".format(parameters_file))
@@ -108,7 +107,7 @@ def calculate_charges_and_statistical_data(list_of_parameters, method, set_of_mo
 
 
 class Parameterization:
-    def __init__(self, sdf, ref_charges, method, optimization_method, cpu, parameters, new_parameters, charges, data_dir, rewriting_with_force):
+    def __init__(self, sdf, ref_charges, method, optimization_method, cpu, parameters, new_parameters, charges, data_dir, num_of_molecules, rewriting_with_force):
         start_time = date.now()
         control_existing_files(((sdf, True, "file"),
                                 (ref_charges, True, "file"),
@@ -117,7 +116,7 @@ class Parameterization:
                                rewriting_with_force)
         method = getattr(import_module("modules.methods"), method)()
         method.load_parameters(parameters)
-        set_of_molecules = SetOfMolecules(sdf)
+        set_of_molecules = SetOfMolecules(sdf, num_of_molecules)
         prepare_data_for_parameterization(set_of_molecules, ref_charges, method)
         print("Parameterizating of charges...")
         bounds = [(0.00001, 4)] * len(method.parameters_values) # dořesit
@@ -126,7 +125,7 @@ class Parameterization:
                 exit(colored("Local minimization can not be parallelized!", "red"))
             final_parameters = local_minimization(method.parameters_values, method, set_of_molecules, bounds=bounds)[1]
         elif optimization_method == "guided_minimization":
-            samples = lhs(len(method.parameters_values), samples=len(method.parameters_values) * 50, iterations=1000)
+            samples = lhs(len(method.parameters_values), samples=int(1.3**(len(method.parameters_values) + 5)), criterion="c")
             partial_f = partial(calculate_charges_for_set_of_parameters, method=method, set_of_molecules=set_of_molecules)
             with Pool(cpu) as pool:
                 candidates = sorted(list(chain.from_iterable(pool.map(partial_f, [sample for sample in array_split(samples, cpu)]))), key=itemgetter(0))[:3]
@@ -135,6 +134,12 @@ class Parameterization:
                 final_parameters = sorted([(result[0], result[1]) for result in pool.map(partial_f, [parameters[1] for parameters in candidates])], key=itemgetter(0))[0][1]
         elif optimization_method == "differential_evolution":
             final_parameters = differential_evolution(calculate_charges_and_statistical_data, bounds, args=(method, set_of_molecules))
+        elif optimization_method == "CRS":
+            opt = nlopt.opt(nlopt.GN_DIRECT_L, len(method.parameters_values))
+            opt.set_min_objective(lambda x, grad: calculate_charges_and_statistical_data(method.parameters_values, method, set_of_molecules))
+            opt.set_lower_bounds([x[0] for x in bounds])
+            opt.set_upper_bounds([x[1] for x in bounds])
+            res = opt.optimize(method.parameters_values)
         method.parameters_values = final_parameters
         method.calculate(set_of_molecules)
         print(colored("\033[Kok\n", "green"))

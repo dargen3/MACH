@@ -36,6 +36,7 @@ if __name__ == '__main__':
                          args.new_parameters,
                          args.charges,
                          args.data_dir,
+                         args.num_of_molecules,
                          args.rewriting_with_force)
 
     if args.mode == "comparison":
@@ -49,6 +50,7 @@ if __name__ == '__main__':
                                    args.optimization_method,
                                    args.cpu,
                                    args.data_dir,
+                                   args.num_of_molecules,
                                    args.rewriting_with_force)
 
 

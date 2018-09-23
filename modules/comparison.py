@@ -10,23 +10,13 @@ from sys import exit
 from os import path, mkdir
 from collections import namedtuple
 import webbrowser
+import copy
 
 
-def backround_color(value):
-    if value < 0.05:
-        return "green"
-    elif value < 0.1:
-        return "#4ca64c"
-    elif value < 0.15:
-        return "#99cc99"
-    elif value < 0.2:
-        return "yellow"
-    elif value < 0.3:
-        return "orange"
-    elif value < 0.4:
-        return "red; color: white"
-    elif value >= 0.4:
-        return "darkred; color: white"
+def background_color(value):
+    return "green" if value < 0.05 else "#4ca64c" if value < 0.1 else "#99cc99" if value < 0.15\
+        else "yellow" if value < 0.2 else "orange" if value < 0.3 else "red; color: white" if value < 0.4\
+        else "darkred; color: white"
 
 
 def calculate_statistics(ref_charges, charges):
@@ -61,7 +51,7 @@ class Comparison:
             pass
         self.statistics()
         self.graphs()
-        
+
     def graphs(self):
         plt.switch_backend('agg')
         fig = plt.figure(figsize=(11, 9))
@@ -69,7 +59,7 @@ class Comparison:
         colors = cm.tab20.colors
         color_numbers = {"H~1": 0, "O~1": 2, "O~2": 4, "N~1": 6, "N~2": 8, "C~1": 10, "C~2": 12, "S~1": 14,
                          "Ca~1": 16, "S~2": 18, "P~1": 1, "P~2": 3, "N~3": 5, "C~3": 7, "Br~1": 9, "Cl~1": 9,
-                         "F~1": 9, "I~1": 9, "H": 0, "C": 2, "N": 4, "O": 6, "S": 8}
+                         "F~1": 9, "I~1": 9, "H": 0, "C": 2, "N": 4, "O": 6, "S": 8, "I": 10, "F": 12, "Br": 14, "Cl": 16, "P": 18}
         zipped_charges = list(zip(self.ref_set_of_molecules.atomic_types_charges.items(),
                                   self.set_of_molecules.atomic_types_charges.items()))
         for index, ((atomic_symbol, ref_charges), (_, charges)) in enumerate(zipped_charges):
@@ -87,11 +77,11 @@ class Comparison:
                     continue
                 atom_type_graph.scatter(ref_chg, chg, marker=".", color="gainsboro")
             atom_type_graph.scatter(ref_charges, charges, marker=".", color="black")
-            plt.text(plt.xlim()[1] - 0.1, plt.ylim()[0] + 0.1, "RMSD: {:.3f}\n$R^2$: {:.3f}".
+            plt.text(plt.xlim()[1] - 0.1, plt.ylim()[0] + 0.1, "RMSD: {:.4f}\n$R^2$: {:.4f}".
                      format(self.atomic_types_data[index][1],
                             self.atomic_types_data[index][4]), ha='right', va='bottom', fontsize=28)
             plt.savefig(path.join(self.data_dir, atomic_symbol), dpi=300)
-        all_atoms_graph.text(plt.xlim()[1] - 0.1, plt.ylim()[0] + 0.1, "RMSD: {:.3f}\n$R^2$: {:.3f}".
+        all_atoms_graph.text(plt.xlim()[1] - 0.1, plt.ylim()[0] + 0.1, "RMSD: {:.4f}\n$R^2$: {:.4f}".
                              format(self.all_atoms_data[0], self.all_atoms_data[3]), ha='right', va='bottom', fontsize=28)
         all_atoms_graph.legend(fontsize=14, loc="upper left")
         all_atoms_graph.set_xlabel(self.ref_set_of_molecules.file, fontsize=20)
@@ -139,7 +129,7 @@ Statistics for atomic types:
         print("Writing html file...")
         atomic_types_table = "<tr><th>" + "</th><th>\n".join(self.atomic_types_headers) + "</th></tr>"
         for atomic_type in self.atomic_types_data:
-            atomic_types_table += "\n<tr style=\"background-color: {};\"><td>".format(backround_color(atomic_type[1])) + \
+            atomic_types_table += "\n<tr style=\"background-color: {};\"><td>".format(background_color(atomic_type[1])) + \
                                   "</td><td>".join([str(item) for item in atomic_type]) + "</td></tr>"
         lines = """
 <!DOCTYPE html>

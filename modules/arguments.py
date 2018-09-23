@@ -16,7 +16,7 @@ def load_arguments():
     # metody?? jake
     parser.add_argument("--method", help="Empirical method for calculation partial atomic charges.",
                         choices=("EEM", "SFKEEM", "QEq", "GM"))
-    parser.add_argument("--optimization_method", help="Optimization method for parameterization.", choices=("minimization", "guided_minimization", "differential_evolution"))
+    parser.add_argument("--optimization_method", help="Optimization method for parameterization.", choices=("minimization", "guided_minimization", "differential_evolution", "CRS"))
     parser.add_argument("--cpu", help="Only for optimization method guided minimization. Define number of used cpu for parameterization.", default=1, type=int)
     parser.add_argument("--path", help="Only for parameterization_find_args. Define path to files.")
     parser.add_argument("--data_dir", help="For parameterization and comparison only. Defined directory is created to store correlation graphs and html file.")
@@ -25,6 +25,7 @@ def load_arguments():
     parser.add_argument("--atomic_types_pattern",
                         help="For mode set_of_molecules_info only. Define atomic types for statistics",
                         choices=("atom", "atom_high_bond"), default="atom_high_bond")
+    parser.add_argument("--num_of_molecules", help="Only these number of molecules will be loaded.", type=int)
     parser.add_argument("-f", "--rewriting_with_force", action="store_true",
                         help="All existed files with the same names like your outputs will be replaced.")
     argcomplete.autocomplete(parser)

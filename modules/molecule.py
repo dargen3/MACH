@@ -1,4 +1,4 @@
-from numpy import array, float32, int64, int16
+from numpy import array, float32, int64, int16, zeros, float64
 from scipy import spatial
 from sys import exit
 from termcolor import colored
@@ -48,7 +48,22 @@ class Molecule:
         return array([atom for bond in self.bonds for atom in bond[0]], dtype=int64) - 1
 
     def num_of_bonds_mul_two(self):
-        return array([len(self.bonds)*2], dtype=int64) # domyslet.. je to nanic
+        return array([len(self.bonds)*2], dtype=int64)
+
+    def MGC_matrix(self):
+        matrix = zeros((self.num_of_atoms, self.num_of_atoms), dtype=float64)
+        for x in range(self.num_of_atoms):
+            matrix[x][x] = 1
+        for (atom1, atom2), bond_type in self.bonds:
+            atom1 -= 1
+            atom2 -= 1
+            matrix[atom1][atom1] += bond_type
+            matrix[atom2][atom2] += bond_type
+            matrix[atom1][atom2] -= bond_type
+            matrix[atom2][atom1] -= bond_type
+        return array([value for index, line in enumerate(matrix) for value in line[index:]], dtype=float64)
+
+
 
     def __len__(self):
         return self.num_of_atoms

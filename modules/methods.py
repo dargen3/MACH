@@ -1,14 +1,14 @@
 from sys import exit
 from termcolor import colored
 from numba import jit
-from numpy import float64, empty, array, ones, zeros, sqrt, cosh, concatenate, int64
-from numpy.linalg import solve
+from numpy import float64, empty, array, ones, zeros, sqrt, cosh, concatenate, int64, sum
+from numpy.linalg import solve, inv
 from math import erf
 
 
 class Methods:
     def __init__(self):
-        self.necessarily_data = {"EEM": ["distances"], "QEq": ["distances"], "SFKEEM": ["distances"], "GM": ["bonds_without_bond_type", "num_of_bonds_mul_two"]}[str(self)]
+        self.necessarily_data = {"EEM": ["distances"], "QEq": ["distances"], "SFKEEM": ["distances"], "GM": ["bonds_without_bond_type", "num_of_bonds_mul_two"], "MGC": ["MGC_matrix"]}[str(self)]
 
     def create_method_data(self, set_of_molecules):
         set_of_molecules.all_num_of_atoms = array([molecule.num_of_atoms for molecule in set_of_molecules], dtype=int64)
@@ -156,7 +156,6 @@ class SFKEEM(Methods):
 @jit(nopython=True, cache=True)
 def qeq_calculate(distances, all_symbols, all_num_of_atoms, parameters_values):
     results = empty(all_symbols.size, dtype=float64)
-    ccc = parameters_values[-1]
     formal_charge = 0
     index = 0
     counter_distance = 0
@@ -180,7 +179,7 @@ def qeq_calculate(distances, all_symbols, all_num_of_atoms, parameters_values):
                 rad1 = vector_rad[i]
                 rad2 = vector_rad[j]
                 distance = distances[counter_distance]
-                matrix[i][j] = matrix[j][i] = ccc * erf(sqrt(rad1 * rad2 / (rad1 + rad2)) * distance) / distance
+                matrix[i][j] = matrix[j][i] = erf(sqrt(rad1 * rad2 / (rad1 + rad2)) * distance) / distance
                 counter_distance += 1
         vector[-1] = formal_charge
         results[index: new_index] = solve(matrix, vector)[:-1]
@@ -230,5 +229,44 @@ def gm_calculate(all_bonds, all_symbols, all_num_of_atoms, all_num_of_bonds, par
 
 class GM(Methods):
     def calculate(self, set_of_molecules):
-        self.results = gm_calculate(set_of_molecules.all_bonds_without_bond_type, set_of_molecules.multiplied_all_symbolic_numbers,set_of_molecules.all_num_of_atoms, set_of_molecules.all_num_of_bonds_mul_two,
-                                 self.parameters_values)
+        self.results = gm_calculate(set_of_molecules.all_bonds_without_bond_type, set_of_molecules.multiplied_all_symbolic_numbers,
+                                    set_of_molecules.all_num_of_atoms, set_of_molecules.all_num_of_bonds_mul_two,
+                                    self.parameters_values)
+
+@jit(nopython=True, cache=True)
+def mgc_calculate(all_num_of_atoms, all_mgc_matrix, all_symbols, parameters_values):
+    results = empty(all_symbols.size, dtype=float64)
+    formal_charge = 0
+    kappa = parameters_values[-1]
+    index = 0
+    counter_symbols = 0
+    counter = 0
+    for num_of_atoms in all_num_of_atoms:
+        new_index = index + num_of_atoms
+        vector = empty(num_of_atoms, dtype=float64)
+        matrix = empty((num_of_atoms, num_of_atoms), dtype=float64)
+        for x in range(num_of_atoms):
+            vector[x] = parameters_values[all_symbols[counter_symbols]]
+            counter_symbols += 1
+            for y in range(x, num_of_atoms):
+                matrix[x][y] = matrix[y][x] = all_mgc_matrix[counter]
+                counter += 1
+        x0 = solve(matrix, vector)
+        xx = inv(matrix) * x0
+        vvv = empty(num_of_atoms, dtype=float64)
+        for x in range(vvv.size):
+            sss = 0
+            for y in range(vvv.size):
+                sss += xx[x][y]
+            vvv[x]=sss
+        results[index: new_index] = (vvv-x0)/2.5
+        index = new_index
+    return results
+
+
+
+
+
+class MGC(Methods):
+    def calculate(self, set_of_molecules):
+        self.results = mgc_calculate(set_of_molecules.all_num_of_atoms, set_of_molecules.all_MGC_matrix, set_of_molecules.multiplied_all_symbolic_numbers, self.parameters_values)
