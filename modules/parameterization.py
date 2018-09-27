@@ -11,7 +11,7 @@ from sys import exit
 from numpy import sum, sqrt, abs, max, array_split, linalg, array
 from pyDOE import lhs
 from functools import partial
-from multiprocessing import Pool
+from multiprocessing import Pool, Manager
 from itertools import chain
 from operator import itemgetter
 from datetime import datetime as date
@@ -21,16 +21,28 @@ from shutil import copyfile
 import nlopt
 
 def calculate_charges_for_set_of_parameters(set_of_parameters, method, set_of_molecules):
+    global course_of_parameterization
     results = []
     for parameters in set_of_parameters:
         results.append((calculate_charges_and_statistical_data(parameters, method, set_of_molecules), tuple(parameters)))
     return results
 
 
-def local_minimization(input_parameters, method, set_of_molecules, bounds):
-    res = minimize(calculate_charges_and_statistical_data, input_parameters, method="SLSQP", bounds=bounds,
-                   args=(method, set_of_molecules))
-    return res.fun, res.x
+def local_minimization(input_parameters, minimization_method, method, set_of_molecules, bounds):
+    global course_of_parameterization
+    if minimization_method in ["SLSQP"]:
+        res = minimize(calculate_charges_and_statistical_data, input_parameters, method=minimization_method, bounds=bounds,
+                       args=(method, set_of_molecules))
+        return res.fun, res.x
+    elif minimization_method in ["NEWUOA"]:
+        opt = nlopt.opt(nlopt.LN_NEWUOA, len(method.parameters_values))
+        opt.set_min_objective(lambda x, grad: calculate_charges_and_statistical_data(method.parameters_values, method, set_of_molecules))
+        opt.set_lower_bounds([x[0] for x in bounds])
+        opt.set_upper_bounds([x[1] for x in bounds])
+        opt.set_xtol_rel(1e-9)
+        res = opt.optimize(method.parameters_values)
+        return opt.last_optimum_value(), res
+
 
 def write_parameters_to_file(parameters_file, method, set_of_molecules_file, summary_statistics, optimization_method, start_time):
     print("Writing parameters to {}...".format(parameters_file))
@@ -59,6 +71,7 @@ def write_parameters_to_file(parameters_file, method, set_of_molecules_file, sum
     print(colored("ok\n", "green"))
     return summary_lines, parameters_lines
 
+
 def prepare_data_for_comparison(method, set_of_molecules):
     atomic_types_charges = {}
     set_of_molecules.atomic_types_charges = {}
@@ -74,10 +87,14 @@ def prepare_data_for_comparison(method, set_of_molecules):
         index += molecule_len
     return atomic_types_charges, chg_molecules
 
+
 def prepare_data_for_parameterization(set_of_molecules, ref_charges, method):
     method.create_method_data(set_of_molecules)
     set_of_molecules.add_ref_charges(ref_charges, len(method.atomic_types), set_of_molecules.all_symbolic_numbers)
     method.control_parameters(set_of_molecules.file, set_of_molecules.all_symbolic_numbers)
+    global course_of_parameterization
+    manager = Manager()
+    course_of_parameterization = manager.list()
 
 @jit(nopython=True, cache=True)
 def rmsd_calculation(results, right_charges):
@@ -103,11 +120,13 @@ def calculate_charges_and_statistical_data(list_of_parameters, method, set_of_mo
         atomic_types_rmsd.append(rmsd_calculation(calculated_atomic_types_charges, atomic_type_charges))
     greater_rmsd = max(atomic_types_rmsd)
     print("Total RMSD: {}    Worst RMSD: {}".format(str(rmsd)[:8], str(greater_rmsd)[:8]), end="\r")
-    return greater_rmsd + rmsd + sum(atomic_types_rmsd) / len(atomic_types_rmsd)
+    objective_value = greater_rmsd + rmsd + sum(atomic_types_rmsd) / len(atomic_types_rmsd)
+    course_of_parameterization.append([rmsd] + atomic_types_rmsd)
+    return objective_value
 
 
 class Parameterization:
-    def __init__(self, sdf, ref_charges, method, optimization_method, cpu, parameters, new_parameters, charges, data_dir, num_of_molecules, rewriting_with_force):
+    def __init__(self, sdf, ref_charges, method, optimization_method, minimization_method, cpu, parameters, new_parameters, charges, data_dir, num_of_molecules, rewriting_with_force):
         start_time = date.now()
         control_existing_files(((sdf, True, "file"),
                                 (ref_charges, True, "file"),
@@ -123,28 +142,22 @@ class Parameterization:
         if optimization_method == "minimization":
             if cpu != 1:
                 exit(colored("Local minimization can not be parallelized!", "red"))
-            final_parameters = local_minimization(method.parameters_values, method, set_of_molecules, bounds=bounds)[1]
+            final_parameters = local_minimization(method.parameters_values, minimization_method, method, set_of_molecules, bounds=bounds)[1]
         elif optimization_method == "guided_minimization":
-            samples = lhs(len(method.parameters_values), samples=int(1.3**(len(method.parameters_values) + 5)), criterion="c")
+            samples = lhs(len(method.parameters_values), samples=1000, criterion="c")
             partial_f = partial(calculate_charges_for_set_of_parameters, method=method, set_of_molecules=set_of_molecules)
             with Pool(cpu) as pool:
                 candidates = sorted(list(chain.from_iterable(pool.map(partial_f, [sample for sample in array_split(samples, cpu)]))), key=itemgetter(0))[:3]
-            partial_f = partial(local_minimization, method=method, set_of_molecules=set_of_molecules, bounds=bounds)
+            partial_f = partial(local_minimization, minimization_method=minimization_method, method=method, set_of_molecules=set_of_molecules, bounds=bounds)
             with Pool(cpu) as pool:
                 final_parameters = sorted([(result[0], result[1]) for result in pool.map(partial_f, [parameters[1] for parameters in candidates])], key=itemgetter(0))[0][1]
         elif optimization_method == "differential_evolution":
             final_parameters = differential_evolution(calculate_charges_and_statistical_data, bounds, args=(method, set_of_molecules))
-        elif optimization_method == "CRS":
-            opt = nlopt.opt(nlopt.GN_DIRECT_L, len(method.parameters_values))
-            opt.set_min_objective(lambda x, grad: calculate_charges_and_statistical_data(method.parameters_values, method, set_of_molecules))
-            opt.set_lower_bounds([x[0] for x in bounds])
-            opt.set_upper_bounds([x[1] for x in bounds])
-            res = opt.optimize(method.parameters_values)
         method.parameters_values = final_parameters
         method.calculate(set_of_molecules)
         print(colored("\033[Kok\n", "green"))
         atomic_types_charges, chg_molecules = prepare_data_for_comparison(method, set_of_molecules)
-        comparison = Comparison(set_of_molecules, (method.results, atomic_types_charges, chg_molecules, charges), data_dir, rewriting_with_force, parameterization=True)
+        comparison = Comparison(set_of_molecules, (method.results, atomic_types_charges, chg_molecules, charges), data_dir, rewriting_with_force, parameterization=True, course=course_of_parameterization)
         copyfile(sdf, path.join(data_dir, path.basename(sdf)))
         copyfile(ref_charges, path.join(data_dir, path.basename(ref_charges)))
         write_charges_to_file(path.join(data_dir, charges), method.results, set_of_molecules)

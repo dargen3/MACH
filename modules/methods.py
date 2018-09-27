@@ -1,14 +1,14 @@
 from sys import exit
 from termcolor import colored
 from numba import jit
-from numpy import float64, empty, array, ones, zeros, sqrt, cosh, concatenate, int64, sum
+from numpy import float64, empty, array, ones, zeros, sqrt, cosh, concatenate, int64, sum, prod
 from numpy.linalg import solve, inv
 from math import erf
 
 
 class Methods:
     def __init__(self):
-        self.necessarily_data = {"EEM": ["distances"], "QEq": ["distances"], "SFKEEM": ["distances"], "GM": ["bonds_without_bond_type", "num_of_bonds_mul_two"], "MGC": ["MGC_matrix"]}[str(self)]
+        self.necessarily_data = {"EEM": ["distances"], "QEq": ["distances"], "SFKEEM": ["distances"], "GM": ["bonds_without_bond_type", "num_of_bonds_mul_two"], "MGC": ["MGC_matrix"], "BEEM": ["distances"]}[str(self)]
 
     def create_method_data(self, set_of_molecules):
         set_of_molecules.all_num_of_atoms = array([molecule.num_of_atoms for molecule in set_of_molecules], dtype=int64)
@@ -233,11 +233,12 @@ class GM(Methods):
                                     set_of_molecules.all_num_of_atoms, set_of_molecules.all_num_of_bonds_mul_two,
                                     self.parameters_values)
 
-@jit(nopython=True, cache=True)
+
+
+#@jit(nopython=True, cache=True)
 def mgc_calculate(all_num_of_atoms, all_mgc_matrix, all_symbols, parameters_values):
     results = empty(all_symbols.size, dtype=float64)
-    formal_charge = 0
-    kappa = parameters_values[-1]
+    # no formal charge
     index = 0
     counter_symbols = 0
     counter = 0
@@ -251,22 +252,64 @@ def mgc_calculate(all_num_of_atoms, all_mgc_matrix, all_symbols, parameters_valu
             for y in range(x, num_of_atoms):
                 matrix[x][y] = matrix[y][x] = all_mgc_matrix[counter]
                 counter += 1
-        x0 = solve(matrix, vector)
-        xx = inv(matrix) * x0
-        vvv = empty(num_of_atoms, dtype=float64)
-        for x in range(vvv.size):
-            sss = 0
-            for y in range(vvv.size):
-                sss += xx[x][y]
-            vvv[x]=sss
-        results[index: new_index] = (vvv-x0)/2.5
+        # ./mach.py --mode parameterization_find_args --optimization_method minimization --data_dir asldfjalksdf -f --path  data/MGC/1/  --num_of_molecules 1
+        print((solve(matrix, vector) - vector)/(prod(vector)**(1/num_of_atoms)))
+        from sys import exit ; exit()
+        results[index: new_index] = (solve(matrix, vector) - vector)/(prod(vector)**(1/num_of_atoms))
         index = new_index
+        # je nanic
     return results
-
-
 
 
 
 class MGC(Methods):
     def calculate(self, set_of_molecules):
         self.results = mgc_calculate(set_of_molecules.all_num_of_atoms, set_of_molecules.all_MGC_matrix, set_of_molecules.multiplied_all_symbolic_numbers, self.parameters_values)
+
+
+
+
+
+##########################################################################################
+
+"""
+@jit(nopython=True, cache=True)
+def beem_calculate(distances, symbols, all_num_of_atoms, parameters_values):
+    results = empty(symbols.size, dtype=float64)
+    formal_charge = 0
+    sigma = parameters_values[-1]
+    ddd = parameters_values[-1]
+    index = 0
+    counter_distance = 0
+    counter_symbols = 0
+    for num_of_atoms in all_num_of_atoms:
+        new_index = index + num_of_atoms
+        num_of_atoms_add_1 = num_of_atoms + 1
+        matrix = ones((num_of_atoms_add_1, num_of_atoms_add_1), dtype=float64)
+        vector = empty(num_of_atoms_add_1, dtype=float64)
+        for x in range(num_of_atoms):
+            symbol = symbols[counter_symbols]
+            counter_symbols += 1
+            vector[x] = - parameters_values[symbol]
+            value = parameters_values[symbol + 1]
+            for y in range(num_of_atoms):
+                matrix[x][y] *= value
+                matrix[y][x] *= value
+        for x in range(num_of_atoms):
+            matrix[x][x] = sigma/((1/((sqrt(matrix[x][x]))**3))**(1/3))
+            for y in range(x+1, num_of_atoms):
+                matrix[x][y] = matrix[y][x] = sigma/((1/((sqrt(matrix[x][x]))**3 + distances[counter_distance]**3))**(1/3))
+                counter_distance += 1
+        vector[-1] = formal_charge
+        matrix[num_of_atoms, num_of_atoms] = 0.0
+        results[index: new_index] = solve(matrix, vector)[:-1]
+        index = new_index
+    return results
+
+
+
+class BEEM(Methods):
+    def calculate(self, set_of_molecules):
+        self.results = sfkeem_calculate(set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers,
+                                     set_of_molecules.all_num_of_atoms, self.parameters_values)
+"""

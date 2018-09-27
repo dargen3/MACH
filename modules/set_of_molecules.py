@@ -131,7 +131,7 @@ Number of atoms type:  {}\n
 
 
 class SetOfMoleculesFromChargesFile(ArciSet):
-    def __init__(self, file):
+    def __init__(self, file, ref=True):
         print("Loading of set of molecules from {}...".format(file))
         super().__init__(file)
         with open(self.file, "r") as charges_file:
@@ -151,6 +151,9 @@ class SetOfMoleculesFromChargesFile(ArciSet):
                 all_charges.extend(charges)
             for atomic_symbol, charge in atomic_types_charges.items():
                 atomic_types_charges[atomic_symbol] = array(charge)
-            self.all_charges = array(all_charges, dtype=float32)
+            if ref:
+                self.ref_charges = array(all_charges, dtype=float32)
+            else:
+                self.all_charges = array(all_charges, dtype=float32)
             self.atomic_types_charges = atomic_types_charges
         print(colored("ok\n", "green"))

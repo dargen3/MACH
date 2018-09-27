@@ -2,7 +2,7 @@ from .control_existing import control_existing_files
 from .set_of_molecules import SetOfMolecules, SetOfMoleculesFromChargesFile
 from .control_order_of_molecules import control_order_of_molecules
 from termcolor import colored
-from numpy import sqrt, mean, max, min, sum, corrcoef
+from numpy import sqrt, mean, max, min, sum, corrcoef, log10, array
 from scipy.stats import pearsonr
 from tabulate import tabulate
 from matplotlib import pyplot as plt, cm
@@ -29,11 +29,10 @@ def calculate_statistics(ref_charges, charges):
 
 
 class Comparison:
-    def __init__(self, ref_charges_data, charges_data, data_dir, rewriting_with_force, parameterization=False):
+    def __init__(self, ref_charges_data, charges_data, data_dir, rewriting_with_force, parameterization=False, course=None):
         self.data_dir = data_dir
         if parameterization:
-            set_of_molecules_nt = namedtuple("set_of_molecules", ("all_charges", "atomic_types_charges",
-                                                                  "molecules", "file"))
+            set_of_molecules_nt = namedtuple("set_of_molecules", ("all_charges", "atomic_types_charges", "molecules", "file"))
             self.ref_set_of_molecules = ref_charges_data
             self.set_of_molecules = set_of_molecules_nt(*charges_data)
         else:
@@ -42,7 +41,7 @@ class Comparison:
                                     (self.data_dir, False, "directory")),
                                    rewriting_with_force)
             self.ref_set_of_molecules = SetOfMoleculesFromChargesFile(ref_charges_data)
-            self.set_of_molecules = SetOfMoleculesFromChargesFile(charges_data)
+            self.set_of_molecules = SetOfMoleculesFromChargesFile(charges_data, ref=False)
             control_order_of_molecules(self.ref_set_of_molecules.names, self.set_of_molecules.names,
                                        self.ref_set_of_molecules.file, self.set_of_molecules.file)
         try:
@@ -50,10 +49,17 @@ class Comparison:
         except FileExistsError:
             pass
         self.statistics()
-        self.graphs()
+        self.graphs(course)
 
-    def graphs(self):
+    def graphs(self, course):
         plt.switch_backend('agg')
+        course_fig = plt.figure(figsize=(11, 9)).add_subplot(111, rasterized=True)
+        for index, (atomic_symbol, data) in enumerate(zip(["total RMSD"] + [atomic_type[0] for atomic_type in self.atomic_types_data], zip(*course))):
+            linewidth = 4 if index == 0 else 1
+            course_fig.plot(data, label=atomic_symbol, linewidth=linewidth)
+        course_fig.legend(fontsize=14, loc="upper left")
+        course_fig.set_title("Course of parameterization", fontsize=20, weight="bold")
+        plt.savefig(path.join(self.data_dir, "course_of_parameterization.png"), dpi=300)
         fig = plt.figure(figsize=(11, 9))
         all_atoms_graph = fig.add_subplot(111)
         colors = cm.tab20.colors
@@ -194,6 +200,8 @@ Statistics for atomic types:
 </table>
 
 {}
+
+<img src=\"course_of_parameterization.png\" width=\"1600\">
 
 </body>
 </html>

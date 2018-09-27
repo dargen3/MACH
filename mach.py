@@ -31,6 +31,7 @@ if __name__ == '__main__':
                          args.ref_charges,
                          args.method,
                          args.optimization_method,
+                         args.minimization_method,
                          args.cpu,
                          args.parameters,
                          args.new_parameters,
@@ -48,6 +49,7 @@ if __name__ == '__main__':
     if args.mode == "parameterization_find_args": # only for my usage
         parameterization_find_args(args.path,
                                    args.optimization_method,
+                                   args.minimization_method,
                                    args.cpu,
                                    args.data_dir,
                                    args.num_of_molecules,
@@ -65,6 +67,7 @@ if __name__ == '__main__':
     if args.mode == "parameterization_meta":  # only for my usage
         parameterization_meta(args.path,
                               args.optimization_method,
+                              args.minimization_method,
                               args.cpu,
                               args.RAM,
                               args.walltime)
