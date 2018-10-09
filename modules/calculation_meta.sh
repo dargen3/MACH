@@ -6,10 +6,7 @@ CHG=$(basename "$3")
 PARA_name=${PARA:4:-4}
 date=$(date +%Y_%m_%d_%H_%M_%S_$PARA_name)"_cal"
 
-
 ssh dargen3@tarkil.grid.cesnet.cz "cd mach ; mkdir $date"
-
-
 printf "Copying of data to MetaCentrum...\n"
 scp "$1" "$2" dargen3@tarkil.grid.cesnet.cz:/storage/praha1/home/dargen3/mach/$date
 printf "\e[32mok\e[39m\n\n"

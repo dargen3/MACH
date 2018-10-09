@@ -13,19 +13,19 @@ def load_arguments():
     parser.add_argument("--ref_charges", help="File with reference charges for comparison.")
     parser.add_argument("--parameters", help="File with parameters.")
     parser.add_argument("--new_parameters", help="File to store new parametes.")
-    # metody?? jake
     parser.add_argument("--method", help="Empirical method for calculation partial atomic charges.",
-                        choices=("EEM", "SFKEEM", "QEq", "GM", "MGC"))
+                        choices=("EEM", "SFKEEM", "QEq", "GM", "MGC", "SQE", "ACKS2"))
     parser.add_argument("--optimization_method", help="Optimization method for parameterization.", choices=("minimization", "guided_minimization", "differential_evolution"))
     parser.add_argument("--minimization_method", help="Minimization method for parameterization.", choices=("SLSQP", "NEWUOA"), default="SLSQP")
     parser.add_argument("--cpu", help="Only for optimization method guided minimization. Define number of used cpu for parameterization.", default=1, type=int)
+    parser.add_argument("--GM_level", help="Only for optimization method guided minimization. Define how many initial samples are used by formula num_of_parameters**level_of_GM.", default=2, type=int)
     parser.add_argument("--path", help="Only for parameterization_find_args. Define path to files.")
     parser.add_argument("--data_dir", help="For parameterization and comparison only. Defined directory is created to store correlation graphs and html file.")
     parser.add_argument("--RAM", help="For parameterization_meta and calculation_meta only. Define max. RAM usage for META job in GB.", default=2, type=int)  # only for my usage
     parser.add_argument("--walltime", help="For parameterization_meta and calculation_meta only. Define max time for META job in hours.", default=2, type=int)  # only for my usage
     parser.add_argument("--atomic_types_pattern",
                         help="For mode set_of_molecules_info only. Define atomic types for statistics",
-                        choices=("atom", "atom_high_bond"), default="atom_high_bond")
+                        choices=("atomic_symbol", "atomic_symbol_high_bond"), default="atomic_symbol_high_bond")
     parser.add_argument("--num_of_molecules", help="Only these number of molecules will be loaded.", type=int)
     parser.add_argument("-f", "--rewriting_with_force", action="store_true",
                         help="All existed files with the same names like your outputs will be replaced.")
@@ -60,7 +60,7 @@ def load_arguments():
         if args.method is None or args.sdf is None or args.parameters is None or args.charges is None:
             parser.error("For calculation_meta must be choice --method, --sdf, --parameters and --charges.")
 
-    if args.mode == "parameterization_meta":
+    if args.mode == "parameterization_meta":  # only for my usage
         if args.path is None or args.optimization_method is None:
             parser.error("For parameterization_meta must choice --path and --optimization_method.")
 

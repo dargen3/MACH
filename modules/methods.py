@@ -1,24 +1,33 @@
 from sys import exit
 from termcolor import colored
 from numba import jit
-from numpy import float64, empty, array, ones, zeros, sqrt, cosh, concatenate, int64, sum, prod
-from numpy.linalg import solve, inv
+from numpy import float64, empty, array, ones, zeros, sqrt, cosh, concatenate, int64, sum, prod, dot
+from numpy.linalg import solve, eigvalsh
 from math import erf
 
 
 class Methods:
     def __init__(self):
-        self.necessarily_data = {"EEM": ["distances"], "QEq": ["distances"], "SFKEEM": ["distances"], "GM": ["bonds_without_bond_type", "num_of_bonds_mul_two"], "MGC": ["MGC_matrix"], "BEEM": ["distances"]}[str(self)]
+        self.necessarily_data = {"EEM": ["distances"],
+                                 "QEq": ["distances"],
+                                 "SFKEEM": ["distances"],
+                                 "GM": ["bonds_without_bond_type", "num_of_bonds_mul_two"],
+                                 "MGC": ["MGC_matrix"],
+                                 "SQE": ["distances", "num_of_bonds_mul_two", "bonds_without_bond_type"],
+                                 "ACKS2": ["distances", "num_of_bonds_mul_two", "bonds_without_bond_type"]
+                                 }[str(self)]
 
     def create_method_data(self, set_of_molecules):
         set_of_molecules.all_num_of_atoms = array([molecule.num_of_atoms for molecule in set_of_molecules], dtype=int64)
-        set_of_molecules.all_symbolic_numbers = concatenate([molecule.symbolic_numbers(self) for molecule in set_of_molecules], axis=0)
-        set_of_molecules.multiplied_all_symbolic_numbers = set_of_molecules.all_symbolic_numbers * len(self.value_symbols)
+        set_of_molecules.all_symbolic_numbers_atoms = concatenate([molecule.symbolic_numbers_atoms(self) for molecule in set_of_molecules], axis=0)
+        if self.bond_types:
+            set_of_molecules.all_symbolic_numbers_bonds = concatenate([molecule.symbolic_numbers_bonds(self) for molecule in set_of_molecules], axis=0)
+        set_of_molecules.multiplied_all_symbolic_numbers_atoms = set_of_molecules.all_symbolic_numbers_atoms * len(self.atom_value_symbols)
         for data in self.necessarily_data:
             setattr(set_of_molecules, "all_" + data, concatenate([getattr(molecule, data)() for molecule in set_of_molecules], axis=0))
 
-    def control_parameters(self, file, all_symbolic_numbers):
-        missing_atoms_in_parameters = [self.atomic_types[sym_num] for sym_num in range(len(self.atomic_types)) if sym_num not in all_symbolic_numbers]
+    def control_parameters(self, file, all_symbolic_numbers_atoms):
+        missing_atoms_in_parameters = [self.atomic_types[sym_num] for sym_num in range(len(self.atomic_types)) if sym_num not in all_symbolic_numbers_atoms]
         if missing_atoms_in_parameters:
             exit(colored("No {} atoms in {}. Parameterization is not possible.".format(", ".join(missing_atoms_in_parameters), file), "red"))
 
@@ -55,26 +64,51 @@ class Methods:
                 self.parameters[key] = float64(value)
             self.keys = [line for line in parameters_file[key_index + 1: value_symbol_index]]
             self.atomic_types_pattern = "_".join([key for key in self.keys])
-            self.value_symbols = [line for line in parameters_file[value_symbol_index + 1: value_index]]
+            self.atom_value_symbols = [line for line in parameters_file[value_symbol_index + 1: value_index] if line[0] != "-"]
+            self.bond_value_symbols = [line for line in parameters_file[value_symbol_index + 1: value_index] if line[0] == "-"]
+            self.value_symbols = self.atom_value_symbols + self.bond_value_symbols
             self.atomic_types = []
             for line in parameters_file[value_index + 1: end_index]:
                 atomic_type_data = line.split()
+                atomic_type = "~".join(atomic_type_data[:len(self.keys)])
+                self.atomic_types.append(atomic_type)
                 for x in range(len(self.value_symbols)):
-                    atomic_type = "~".join(atomic_type_data[:len(self.keys)])
-                    self.atomic_types.append(atomic_type)
-                    self.parameters["{}_{}".format(atomic_type, self.value_symbols[x])] = float(atomic_type_data[x + len(self.keys)])
-        self.atomic_types = sorted(tuple(set(self.atomic_types)))
+                    parameter_value = atomic_type_data[x + len(self.keys)]
+                    if parameter_value == "X":
+                        continue
+                    if self.value_symbols[x][0] == "-":
+                        self.parameters["bond-{}".format("-".join(sorted([atomic_type, self.value_symbols[x][1:]])))] = float(parameter_value)
+                    else:
+                        self.parameters["{}_{}".format(atomic_type, self.value_symbols[x])] = float(parameter_value)
+        self.atomic_types = sorted(self.atomic_types)
+        self.bond_types = sorted([key for key in self.parameters.keys() if key[:5] == "bond-"])
         parameters_values = [0 for _ in range(len(self.parameters))]
-        writed_glob_par = 1
+        writed_glob_par = -1
+        num_of_atom_par = len(self.atom_value_symbols) * len(self.atomic_types)
+        self.key_index = {}
         for key, value in self.parameters.items():
             if key[0].isupper():
                 atomic_type, value_symbol = key.split("_")
-                parameters_values[self.atomic_types.index(atomic_type) * len(self.value_symbols) + self.value_symbols.index(value_symbol)] = value
+                index = self.atomic_types.index(atomic_type) * len(self.atom_value_symbols) + self.atom_value_symbols.index(value_symbol)
+                parameters_values[index] = value
+                self.key_index[key] = index
+            elif key[:5] == "bond-":
+                index = num_of_atom_par + self.bond_types.index(key)
+                parameters_values[index] = value
+                self.key_index[key] = index
             else:
-                parameters_values[-1] = value
-                writed_glob_par += 1
+                parameters_values[writed_glob_par] = value
+                self.key_index[key] = writed_glob_par
+                writed_glob_par -= 1
         self.parameters_values = array(parameters_values, dtype=float64)
         print(colored("ok\n", "green"))
+
+    def new_parameters(self, new_parameters):
+        self.parameters_values = new_parameters
+        parameters = {}
+        for key in self.parameters.keys():
+            parameters[key] = self.parameters_values[self.key_index[key]]
+        self.parameters = parameters
 
 #####################################################################
 @jit(nopython=True, cache=True)
@@ -108,12 +142,11 @@ def eem_calculate(distances, symbols, all_num_of_atoms, parameters_values):
 
 class EEM(Methods):
     def calculate(self, set_of_molecules):
-        self.results = eem_calculate(set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers,
+        self.results = eem_calculate(set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms,
                                      set_of_molecules.all_num_of_atoms, self.parameters_values)
 
+
 ##########################################################################################
-
-
 @jit(nopython=True, cache=True)
 def sfkeem_calculate(distances, symbols, all_num_of_atoms, parameters_values):
     results = empty(symbols.size, dtype=float64)
@@ -149,7 +182,7 @@ def sfkeem_calculate(distances, symbols, all_num_of_atoms, parameters_values):
 
 class SFKEEM(Methods):
     def calculate(self, set_of_molecules):
-        self.results = sfkeem_calculate(set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers,
+        self.results = sfkeem_calculate(set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms,
                                      set_of_molecules.all_num_of_atoms, self.parameters_values)
 
 ##########################################################################################
@@ -189,7 +222,7 @@ def qeq_calculate(distances, all_symbols, all_num_of_atoms, parameters_values):
 
 class QEq(Methods):
     def calculate(self, set_of_molecules):
-        self.results = qeq_calculate(set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers,
+        self.results = qeq_calculate(set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms,
                                      set_of_molecules.all_num_of_atoms, self.parameters_values)
 
 
@@ -229,53 +262,13 @@ def gm_calculate(all_bonds, all_symbols, all_num_of_atoms, all_num_of_bonds, par
 
 class GM(Methods):
     def calculate(self, set_of_molecules):
-        self.results = gm_calculate(set_of_molecules.all_bonds_without_bond_type, set_of_molecules.multiplied_all_symbolic_numbers,
+        self.results = gm_calculate(set_of_molecules.all_bonds_without_bond_type, set_of_molecules.multiplied_all_symbolic_numbers_atoms,
                                     set_of_molecules.all_num_of_atoms, set_of_molecules.all_num_of_bonds_mul_two,
                                     self.parameters_values)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#@jit(nopython=True, cache=True)
+#################################################################################################
+@jit(nopython=True, cache=True)
 def mgc_calculate(all_num_of_atoms, all_mgc_matrix, all_symbols, parameters_values):
     results = empty(all_symbols.size, dtype=float64)
     # no formal charge
@@ -292,19 +285,141 @@ def mgc_calculate(all_num_of_atoms, all_mgc_matrix, all_symbols, parameters_valu
             for y in range(x, num_of_atoms):
                 matrix[x][y] = matrix[y][x] = all_mgc_matrix[counter]
                 counter += 1
-        # ./mach.py --mode parameterization_find_args --optimization_method minimization --data_dir asldfjalksdf -f --path  data/MGC/1/  --num_of_molecules 1
-        print((solve(matrix, vector) - vector)/(prod(vector)**(1/num_of_atoms)))
-        from sys import exit ; exit()
         results[index: new_index] = (solve(matrix, vector) - vector)/(prod(vector)**(1/num_of_atoms))
         index = new_index
-        # je nanic
     return results
-
 
 
 class MGC(Methods):
     def calculate(self, set_of_molecules):
-        self.results = mgc_calculate(set_of_molecules.all_num_of_atoms, set_of_molecules.all_MGC_matrix, set_of_molecules.multiplied_all_symbolic_numbers, self.parameters_values)
+        self.results = mgc_calculate(set_of_molecules.all_num_of_atoms, set_of_molecules.all_MGC_matrix, set_of_molecules.multiplied_all_symbolic_numbers_atoms, self.parameters_values)
+
+
+#####################################################################################
+@jit(nopython=True)
+def sqe_calculate(all_bonds, distances, all_symbols_atoms, all_symbols_bonds, all_num_of_atoms, all_num_of_bonds, parameters_values, num_of_bond_types):
+    results = empty(all_symbols_atoms.size, dtype=float64)
+    index_b = 0
+    index_a = 0
+    counter_distance = 0
+    bond_parameters_values = parameters_values[-num_of_bond_types:]
+    for num_of_atoms, num_of_bonds in zip(all_num_of_atoms, all_num_of_bonds):
+        new_index_b = index_b + num_of_bonds
+        new_index_a = index_a + num_of_atoms
+        symbols_atoms = all_symbols_atoms[index_a: new_index_a]
+        symbols_bonds = all_symbols_bonds[int(index_b/2): int(new_index_b/2)]
+        T = zeros((int(num_of_bonds/2), num_of_atoms))
+        bonds = all_bonds[index_b: new_index_b]
+        for index, bond_index in enumerate(range(0, len(bonds), 2)):
+            atom1, atom2 = bonds[bond_index: bond_index + 2]
+            T[index, atom1] += 1
+            T[index, atom2] -= 1
+        matrix = zeros((num_of_atoms, num_of_atoms))
+        vector = zeros(num_of_atoms)
+        list_of_q0 = empty(num_of_atoms, dtype=float64)
+        list_of_eta = empty(num_of_atoms, dtype=float64)
+        for i in range(num_of_atoms):
+            symbol = symbols_atoms[i]
+            matrix[i][i] = parameters_values[symbol + 1]
+            list_of_eta[i] = parameters_values[symbol + 1]
+            vector[i] = -parameters_values[symbol]
+            list_of_q0[i] = parameters_values[symbol + 3]
+            for j in range(i+1, num_of_atoms):
+                d = distances[counter_distance]
+                counter_distance += 1
+                d0 = sqrt(2*parameters_values[symbol + 2]**2 + 2*parameters_values[symbols_atoms[j] +2]**2)
+                if d0 == 0:
+                    matrix[i,j] = matrix[j,i] = 1.0/d
+                else:
+                    matrix[i,j] = matrix[j,i] = erf(d/d0)/d
+        vector -= dot(matrix, list_of_q0)
+        vector += list_of_eta*list_of_q0
+        A_sqe = dot(T, dot(matrix, T.T))
+        B_sqe = dot(T, vector)
+        for index, b_sym in enumerate(symbols_bonds):
+            A_sqe[index, index] += bond_parameters_values[b_sym]
+        results[index_a: new_index_a] = dot(solve(A_sqe, B_sqe), T) + list_of_q0
+        index_a = new_index_a
+        index_b = new_index_b
+    return results
+
+
+class SQE(Methods):
+    def calculate(self, set_of_molecules):
+        self.results = sqe_calculate(set_of_molecules.all_bonds_without_bond_type, set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms, set_of_molecules.all_symbolic_numbers_bonds,
+                       set_of_molecules.all_num_of_atoms, set_of_molecules.all_num_of_bonds_mul_two, self.parameters_values, len(self.bond_types))
+
+
+##############################################################################################
+@jit(nopython=True, cache=True)
+def acks2_calculate(all_bonds, distances, all_symbols_atoms, all_symbols_bonds, all_num_of_atoms, all_num_of_bonds, parameters_values, num_of_bond_types):
+    results = empty(all_symbols_atoms.size, dtype=float64)
+    index_b = 0
+    index_a = 0
+    counter_distance = 0
+    bond_parameters_values = parameters_values[-num_of_bond_types:]
+    for num_of_atoms, num_of_bonds in zip(all_num_of_atoms, all_num_of_bonds):
+        new_index_b = index_b + num_of_bonds
+        new_index_a = index_a + num_of_atoms
+        symbols_atoms = all_symbols_atoms[index_a: new_index_a]
+        symbols_bonds = all_symbols_bonds[int(index_b / 2): int(new_index_b / 2)]
+        bonds = all_bonds[index_b: new_index_b]
+        matrix = zeros((2 * num_of_atoms + 2, 2 * num_of_atoms + 2))
+        vector = zeros(2 * num_of_atoms + 2)
+        list_of_q0 = empty(num_of_atoms, dtype=float64)
+        list_of_eta = empty(num_of_atoms, dtype=float64)
+        for i in range(num_of_atoms):
+            symbol = symbols_atoms[i]
+            matrix[i][i] = parameters_values[symbol + 1]
+            list_of_eta[i] = parameters_values[symbol + 1]
+            vector[i] = -parameters_values[symbol]
+            list_of_q0[i] = parameters_values[symbol + 3]
+            for j in range(i+1, num_of_atoms):
+                d = distances[counter_distance]
+                counter_distance += 1
+                d0 = sqrt(2*parameters_values[symbol + 2]**2 + 2*parameters_values[symbols_atoms[j] +2]**2)
+                if d0 == 0:
+                    matrix[i,j] = matrix[j,i] = 1.0/d
+                else:
+                    matrix[i,j] = matrix[j,i] = erf(d/d0)/d
+        vector[:num_of_atoms] += list_of_eta * list_of_q0
+        matrix[num_of_atoms, :num_of_atoms] = 1
+        matrix[:num_of_atoms, num_of_atoms] = 1
+        matrix[-1, num_of_atoms + 1:2 * num_of_atoms + 1] = 1
+        matrix[num_of_atoms + 1:2 * num_of_atoms + 1, -1] = 1
+        vector[num_of_atoms] = sum(list_of_q0)
+        vector[num_of_atoms + 1:2 * num_of_atoms + 1] = list_of_q0
+        for i in range(num_of_atoms):
+            matrix[i, num_of_atoms + 1 + i] = 1.0
+            matrix[num_of_atoms + 1 + i, i] = 1.0
+        for b_sym, bond_index in zip(symbols_bonds, range(0, len(bonds), 2)):
+            atom1, atom2 = bonds[bond_index: bond_index + 2]
+            i = num_of_atoms + 1 + atom1
+            j = num_of_atoms + 1 + atom2
+            bsoft = 1 / bond_parameters_values[b_sym]
+            matrix[i, j] += bsoft
+            matrix[j, i] += bsoft
+            matrix[i, i] -= bsoft
+            matrix[j, j] -= bsoft
+        results[index_a: new_index_a] = solve(matrix, vector)[:num_of_atoms]
+        index_a = new_index_a
+        index_b = new_index_b
+    return results
+
+
+
+class ACKS2(Methods):
+    def calculate(self, set_of_molecules):
+        self.results = acks2_calculate(set_of_molecules.all_bonds_without_bond_type, set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms, set_of_molecules.all_symbolic_numbers_bonds,
+                       set_of_molecules.all_num_of_atoms, set_of_molecules.all_num_of_bonds_mul_two, self.parameters_values, len(self.bond_types))
+
+
+
+
+
+
+
+
 
 
 

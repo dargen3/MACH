@@ -84,29 +84,30 @@ class SetOfMolecules(ArciSet):
         self.molecules.append(Molecule(name, num_of_atoms, atomic_symbols, atomic_coordinates, bonds))
 
     def info(self, atomic_types_pattern, file=None):  # file only for my usage
-        counter = Counter()
-        if atomic_types_pattern == "atom":
-            for molecule in self.molecules:
-                counter.update(molecule.atomic_symbols)
-        elif atomic_types_pattern == "atom_high_bond":
-            for molecule in self.molecules:
-                counter.update(molecule.atomic_symbols_high_bond)
-        table = []
-        for atom, count in sorted(counter.items()):
-            table.append((atom, count, round(count / (self.num_of_atoms / 100), 2)))
+        counter_atoms = Counter()
+        counter_bonds = Counter()
+        for molecule in self.molecules:
+            counter_atoms.update(molecule.atoms_representation(atomic_types_pattern))
+            counter_bonds.update(molecule.bonds_representation("{}_{}".format(atomic_types_pattern, atomic_types_pattern)))
+        num_of_bonds = sum(counter_bonds.values())
+        table_atoms = [(atom, count, round(count / (self.num_of_atoms / 100), 2)) for atom, count in counter_atoms.most_common()]
+        table_bonds = [(bond, count, round(count / (num_of_bonds / 100), 2)) for bond, count in counter_bonds.most_common()]
         data = """Statistics data from set of molecules from {}
 Number of molecules:   {}
 Number of atoms:       {}
-Number of atoms type:  {}\n
-{}\n""".format(self.file, self.num_of_molecules, self.num_of_atoms, len(counter),
-           tabulate(table, headers=["Type", "Number", "%"]))
+Number of atoms types: {}\n
+{}\n\n
+Number of bonds:       {}
+Number of bonds types: {}\n
+{}\n""".format(self.file, self.num_of_molecules, self.num_of_atoms, len(counter_atoms),
+           tabulate(table_atoms, headers=["Type", "Number", "%"]), num_of_bonds, len(counter_bonds), tabulate(table_bonds, headers=["Type", "Number", "%"]))
         if file: # only for my usage
             with open(file, "w") as data_file:
                 data_file.write(data)
         else:
             print(data)
 
-    def add_ref_charges(self, file, num_of_atomic_types, all_symbolic_numbers):
+    def add_ref_charges(self, file, num_of_atomic_types, all_symbolic_numbers_atoms):
         with open(file, "r") as charges_file:
             names = [data.splitlines()[0] for data in charges_file.read().split("\n\n")[:-1]][:self.num_of_molecules]
             control_order_of_molecules(names, [molecule.name for molecule in self.molecules], file, self.file)
@@ -124,7 +125,7 @@ Number of atoms type:  {}\n
                 molecule.charges = array(molecule_charges)
         self.ref_charges = array(charges, dtype=float32)
         atomic_types_charges = [[] for _ in range(num_of_atomic_types)]
-        for charge, symbolic_number in zip(self.ref_charges, all_symbolic_numbers):
+        for charge, symbolic_number in zip(self.ref_charges, all_symbolic_numbers_atoms):
             atomic_types_charges[symbolic_number].append(charge)
         self.ref_atomic_types_charges = array([array(chg, dtype=float32) for chg in atomic_types_charges])
         print(colored("ok\n", "green"))
@@ -145,7 +146,7 @@ class SetOfMoleculesFromChargesFile(ArciSet):
                 self.names.append(molecule[0][0])
                 atomic_symbols = [atom_line[1] for atom_line in molecule[2:]]
                 charges = array([float(atom_line[2]) for atom_line in molecule[2:]])
-                self.molecules.append(MoleculeChg(charges))
+                self.molecules.append(MoleculeChg(charges, molecule[0][0]))
                 for atomic_symbol, charge in zip(atomic_symbols, charges):
                     atomic_types_charges.setdefault(atomic_symbol, []).append(charge)
                 all_charges.extend(charges)

@@ -16,7 +16,7 @@ if __name__ == '__main__':
     args = load_arguments()
     print(colored("\nMACH is running with mode: {}\n".format(args.mode), "blue"))
     if args.mode == "set_of_molecules_info":
-        set_of_molecules = SetOfMolecules(args.sdf)
+        set_of_molecules = SetOfMolecules(args.sdf, args.num_of_molecules)
         set_of_molecules.info(args.atomic_types_pattern)
 
     if args.mode == "calculation":
@@ -32,6 +32,7 @@ if __name__ == '__main__':
                          args.method,
                          args.optimization_method,
                          args.minimization_method,
+                         args.GM_level,
                          args.cpu,
                          args.parameters,
                          args.new_parameters,
@@ -50,6 +51,7 @@ if __name__ == '__main__':
         parameterization_find_args(args.path,
                                    args.optimization_method,
                                    args.minimization_method,
+                                   args.GM_level,
                                    args.cpu,
                                    args.data_dir,
                                    args.num_of_molecules,
@@ -68,6 +70,7 @@ if __name__ == '__main__':
         parameterization_meta(args.path,
                               args.optimization_method,
                               args.minimization_method,
+                              args.GM_level,
                               args.cpu,
                               args.RAM,
                               args.walltime)
