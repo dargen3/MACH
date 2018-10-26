@@ -135,7 +135,7 @@ def eem_calculate(distances, symbols, all_num_of_atoms, parameters_values):
                 counter_distance += 1
         matrix[num_of_atoms, num_of_atoms] = 0.0
         vector[-1] = formal_charge
-        results[index: new_index] = solve(matrix, vector)[:-1] # poresit
+        results[index: new_index] = solve(matrix, vector)[:-1]
         index = new_index
     return results
 

@@ -11,6 +11,7 @@ from modules.parameterization_find_args import parameterization_find_args  # onl
 from modules.calculation_meta import calculation_meta  # only for my usage
 from modules.parameterization_meta import parameterization_meta
 from modules.make_complete_html import make_complete_html
+from modules.test_speed import TestSpeed
 
 if __name__ == '__main__':
     args = load_arguments()
@@ -26,13 +27,18 @@ if __name__ == '__main__':
                     args.charges,
                     args.rewriting_with_force)
 
+    if args.mode == "test_speed":
+        TestSpeed(args.sdf,
+                  args.method,
+                  args.parameters)
+
     if args.mode == "parameterization":
         Parameterization(args.sdf,
                          args.ref_charges,
                          args.method,
                          args.optimization_method,
                          args.minimization_method,
-                         args.GM_level,
+                         args.num_of_samples,
                          args.cpu,
                          args.parameters,
                          args.new_parameters,
@@ -51,7 +57,7 @@ if __name__ == '__main__':
         parameterization_find_args(args.path,
                                    args.optimization_method,
                                    args.minimization_method,
-                                   args.GM_level,
+                                   args.num_of_samples,
                                    args.cpu,
                                    args.data_dir,
                                    args.num_of_molecules,
@@ -68,9 +74,10 @@ if __name__ == '__main__':
 
     if args.mode == "parameterization_meta":  # only for my usage
         parameterization_meta(args.path,
+                              args.num_of_molecules,
                               args.optimization_method,
                               args.minimization_method,
-                              args.GM_level,
+                              args.num_of_samples,
                               args.cpu,
                               args.RAM,
                               args.walltime)

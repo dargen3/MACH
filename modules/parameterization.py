@@ -7,9 +7,7 @@ from importlib import import_module
 from termcolor import colored
 from scipy.optimize import minimize, differential_evolution
 from numba import jit
-from sys import exit
-from numpy import sum, sqrt, abs, max, array_split, linalg, array
-from pyDOE import lhs
+from sys import exit, argv
 from functools import partial
 from multiprocessing import Pool #, Manager
 from itertools import chain
@@ -19,14 +17,9 @@ from datetime import timedelta
 from os import path
 from shutil import copyfile
 import nlopt
-
-def calculate_charges_for_set_of_parameters(set_of_parameters, method, set_of_molecules):
-    # global course_of_parameterization
-    results = []
-    for parameters in set_of_parameters:
-        results.append((calculate_charges_and_statistical_data(parameters, method, set_of_molecules), tuple(parameters)))
-    return results
-
+from numpy import sum, sqrt, abs, max, array_split, linalg, array, linspace, random, arange
+import heapq
+import git
 
 def local_minimization(input_parameters, minimization_method, method, set_of_molecules, bounds):
     # global course_of_parameterization
@@ -44,7 +37,7 @@ def local_minimization(input_parameters, minimization_method, method, set_of_mol
         return opt.last_optimum_value(), res
 
 
-def write_parameters_to_file(parameters_file, method, set_of_molecules_file, summary_statistics, optimization_method, minimization_method, start_time):
+def write_parameters_to_file(parameters_file, method, set_of_molecules_file, optimization_method, minimization_method, start_time, num_of_samples, cpu):
     print("Writing parameters to {}...".format(parameters_file))
     values = []
     for atomic_type in method.atomic_types:
@@ -66,13 +59,18 @@ def write_parameters_to_file(parameters_file, method, set_of_molecules_file, sum
                      "Method: {}".format(method),
                      "Optimization method: {}".format(optimization_method),
                      "Date of parameterization: {}".format(start_time.strftime("%Y-%m-%d %H:%M")),
-                     "Time of parameterization: {}\n\n".format(str(date.now() - start_time)[:-7])]
+                     "CPU time: {}\n\n".format(str(date.now() - start_time)[:-7]),
+                     "Number of cpu: {}".format(cpu),
+                     "Command: {}".format(" ".join(argv)),
+                     "Github commit hash: {}".format(git.Repo(search_parent_directories=True).head.object.hexsha)]
+
     if optimization_method in ["minimization", "guided_minimization"]:
         summary_lines.insert(3, "Minimization method: {}".format(minimization_method))
+    if optimization_method == "guided_minimization":
+        summary_lines.insert(3, "Samples: {}".format(num_of_samples))
     with open(parameters_file, "w") as par_file:
         par_file.writelines("\n".join(parameters_lines) + "\n\n\n")
         par_file.writelines("\n".join(summary_lines))
-        par_file.write(summary_statistics)
     print(colored("ok\n", "green"))
     return summary_lines, parameters_lines
 
@@ -130,8 +128,17 @@ def calculate_charges_and_statistical_data(list_of_parameters, method, set_of_mo
     return objective_value
 
 
+@jit(nopython=True, cache=True)
+def lhsclassic(n, samples):
+    cut = linspace(0, 1, samples + 1)
+    u = random.rand(samples, n)
+    for j in range(n):
+        u[random.permutation(arange(samples)), j] = u[:, j] * cut[1] + cut[:samples]
+    return u
+
+
 class Parameterization:
-    def __init__(self, sdf, ref_charges, method, optimization_method, minimization_method, GM_level, cpu, parameters, new_parameters, charges, data_dir, num_of_molecules, rewriting_with_force):
+    def __init__(self, sdf, ref_charges, method, optimization_method, minimization_method, num_of_samples, cpu, parameters, new_parameters, charges, data_dir, num_of_molecules, rewriting_with_force):
         start_time = date.now()
         control_existing_files(((sdf, True, "file"),
                                 (ref_charges, True, "file"),
@@ -144,21 +151,25 @@ class Parameterization:
         prepare_data_for_parameterization(set_of_molecules, ref_charges, method)
 
         print("Parameterizating of charges...")
-        bounds = [(-0.00001, 4)] * len(method.parameters_values) # dořesit
+        low_bond, high_bond = -2, 3
+        bounds = [(low_bond, high_bond)] * len(method.parameters_values) # dořesit
         if optimization_method == "minimization":
             if cpu != 1:
                 exit(colored("Local minimization can not be parallelized!", "red"))
             final_parameters = local_minimization(method.parameters_values, minimization_method, method, set_of_molecules, bounds=bounds)[1]
         elif optimization_method == "guided_minimization":
-            samples = lhs(len(method.parameters_values), samples=len(method.parameters_values)**GM_level, criterion="c")
-            partial_f = partial(calculate_charges_for_set_of_parameters, method=method, set_of_molecules=set_of_molecules)
+            samples = lhsclassic(len(method.parameters_values), samples=num_of_samples)
+            partial_f = partial(calculate_charges_and_statistical_data, method=method, set_of_molecules=set_of_molecules)
             with Pool(cpu) as pool:
-                candidates = sorted(list(chain.from_iterable(pool.map(partial_f, [sample for sample in array_split(samples, cpu)]))), key=itemgetter(0))[:3]
+                candidates_rmsd = list(pool.imap(partial_f, samples, chunksize=100))
+            main_candidates = samples[list(map(candidates_rmsd.index, heapq.nsmallest(3 if cpu < 3 else cpu, candidates_rmsd)))]
             partial_f = partial(local_minimization, minimization_method=minimization_method, method=method, set_of_molecules=set_of_molecules, bounds=bounds)
             with Pool(cpu) as pool:
-                final_parameters = sorted([(result[0], result[1]) for result in pool.map(partial_f, [parameters[1] for parameters in candidates])], key=itemgetter(0))[0][1]
+                parameters = [(result[0], result[1]) for result in pool.map(partial_f, [parameters for parameters in main_candidates])]
+            parameters.sort(key=itemgetter(0))
+            final_parameters = parameters[0][1]
         elif optimization_method == "differential_evolution":
-            final_parameters = differential_evolution(calculate_charges_and_statistical_data, bounds, args=(method, set_of_molecules))
+            final_parameters = differential_evolution(calculate_charges_and_statistical_data, bounds, args=(method, set_of_molecules)).x
         method.new_parameters(final_parameters)
         # method.course = course_of_parameterization
         method.calculate(set_of_molecules)
@@ -169,5 +180,5 @@ class Parameterization:
         copyfile(sdf, path.join(data_dir, path.basename(sdf)))
         copyfile(ref_charges, path.join(data_dir, path.basename(ref_charges)))
         write_charges_to_file(path.join(data_dir, charges), method.results, set_of_molecules)
-        summary_lines, parameters_lines = write_parameters_to_file(path.join(data_dir, new_parameters), method, set_of_molecules.file, comparison.summary_statistics, optimization_method, minimization_method, start_time)
-        comparison.write_html(path.join(data_dir, "{}_{}.html".format(path.basename(sdf)[:-4], method)), path.basename(sdf), charges, path.basename(ref_charges), summary_lines, parameters_lines, new_parameters)
+        summary_lines, parameters_lines = write_parameters_to_file(path.join(data_dir, new_parameters), method, set_of_molecules.file, optimization_method, minimization_method, start_time, num_of_samples if optimization_method == "guided_minimization" else None, cpu)
+        comparison.write_html_parameterization(path.join(data_dir, "{}_{}.html".format(path.basename(sdf)[:-4], method)), path.basename(sdf), charges, path.basename(ref_charges), summary_lines, parameters_lines, new_parameters)
