@@ -7,7 +7,7 @@ from numpy import sqrt, mean, max, min, sum, corrcoef, log10, array
 from scipy.stats import pearsonr
 from tabulate import tabulate
 from sys import exit
-from os import path, mkdir
+from os import path
 from operator import itemgetter
 from collections import namedtuple, Counter
 from bokeh.plotting import figure, show, output_file
@@ -43,8 +43,7 @@ class Comparison:
             self.set_of_molecules = set_of_molecules_nt(*charges_data)
         else:
             control_existing_files(((ref_charges_data, True, "file"),
-                                    (charges_data, True, "file"),
-                                    (self.data_dir, False, "directory")),
+                                    (charges_data, True, "file")),
                                    rewriting_with_force)
             self.ref_set_of_molecules = SetOfMoleculesFromChargesFile(ref_charges_data)
             self.set_of_molecules = SetOfMoleculesFromChargesFile(charges_data, ref=False)
@@ -79,7 +78,7 @@ class Comparison:
                 counter_bonds.update(molecule.bonds_representation("{}_{}".format(self.parameterization.atomic_types_pattern, self.parameterization.atomic_types_pattern)))
             num_of_bonds = sum(list(counter_bonds.values()))
             self.bonds_data = [(bond, count, round(count / (num_of_bonds / 100), 2)) for bond, count in counter_bonds.most_common()]
-            self.bonds_headers = ["Type", "Number", "%"]
+            self.bonds_headers = ["Type", "Count", "%"]
         print(colored("ok\n", "green"))
 
     def graphs(self):
@@ -120,7 +119,9 @@ class Comparison:
         self.correlation_graph_html_source = file_html(p, CDN)
         if not self.parameterization:
             self.correlation_graph_html_source = file_html(p, CDN)
-            self.write_html_comparison("neco_smazat.html")
+            self.write_html_comparison("{}_{}.html".format(path.basename(self.charges_file).split(".")[0], path.basename(self.ref_charges_file).split(".")[0]))
+        print(colored("ok\n", "green"))
+
 
     def write_html_comparison(self, file):
         atomic_types_table = "<tr><th>" + "</th><th>\n".join(self.atomic_types_headers) + "</th></tr>"
@@ -155,9 +156,10 @@ class Comparison:
             html_file.write(open("modules/html_patterns/pattern_parameterization.txt").read().format(
            "<tr><th>" + "</th><th>\n".join(self.all_atoms_headers) + "</th></tr>\n<tr><td>" +
            "</td><td>\n".join([str(item) for item in self.all_atoms_data]) + "</td></tr>",
+           atomic_types_table, self.correlation_graph_html_source, bonds_table,
            "<tr><th>" + "</th><th>\n".join(self.molecules_headers) + "</th></tr>\n<tr><td>" +
            "</td><td>\n".join([str(item) for item in self.molecules_data]) + "</td></tr>",
-           atomic_types_table, self.correlation_graph_html_source, bonds_table, individual_molecules_table,
+           individual_molecules_table,
            "</br>\n".join(["<b>" + line.replace(":", "</b>:") for line in summary_lines]),
            parameters_file, parameters_file,
            "</br>\n".join([line.replace("<", "&lt;").replace(">", "&gt;") for line in parameters_lines]),

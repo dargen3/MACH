@@ -14,7 +14,7 @@ from itertools import chain
 from operator import itemgetter
 from datetime import datetime as date
 from datetime import timedelta
-from os import path
+from os import path, mkdir
 from shutil import copyfile
 import nlopt
 from numpy import sum, sqrt, abs, max, array_split, linalg, array, linspace, random, arange
@@ -25,15 +25,16 @@ def local_minimization(input_parameters, minimization_method, method, set_of_mol
     # global course_of_parameterization
     if minimization_method in ["SLSQP"]:
         res = minimize(calculate_charges_and_statistical_data, input_parameters, method=minimization_method, bounds=bounds,
-                       args=(method, set_of_molecules))
+                       args=(method, set_of_molecules), options={"disp": True})
         return res.fun, res.x
     elif minimization_method in ["NEWUOA"]:
-        opt = nlopt.opt(nlopt.LN_NEWUOA, len(method.parameters_values))
-        opt.set_min_objective(lambda x, grad: calculate_charges_and_statistical_data(method.parameters_values, method, set_of_molecules))
+        opt = nlopt.opt(nlopt.LN_NEWUOA, len(input_parameters))
+        opt.set_min_objective(lambda x, grad: calculate_charges_and_statistical_data(x, method, set_of_molecules))
         opt.set_lower_bounds([x[0] for x in bounds])
         opt.set_upper_bounds([x[1] for x in bounds])
-        opt.set_xtol_rel(1e-9)
-        res = opt.optimize(method.parameters_values)
+        opt.set_xtol_rel(1e-6)
+        res = opt.optimize(input_parameters)
+        print("\nNumber of steps: {}\n".format(opt.get_numevals()))
         return opt.last_optimum_value(), res
 
 
@@ -59,7 +60,7 @@ def write_parameters_to_file(parameters_file, method, set_of_molecules_file, opt
                      "Method: {}".format(method),
                      "Optimization method: {}".format(optimization_method),
                      "Date of parameterization: {}".format(start_time.strftime("%Y-%m-%d %H:%M")),
-                     "CPU time: {}\n\n".format(str(date.now() - start_time)[:-7]),
+                     "CPU time: {}\n\n".format(str((date.now() - start_time)*cpu)[:-7]),
                      "Number of cpu: {}".format(cpu),
                      "Command: {}".format(" ".join(argv)),
                      "Github commit hash: {}".format(git.Repo(search_parent_directories=True).head.object.hexsha)]
@@ -145,6 +146,7 @@ class Parameterization:
                                 (parameters, True, "file"),
                                 (data_dir, False, "directory")),
                                rewriting_with_force)
+        mkdir(data_dir)
         method = getattr(import_module("modules.methods"), method)()
         method.load_parameters(parameters)
         set_of_molecules = SetOfMolecules(sdf, num_of_molecules)

@@ -1,10 +1,7 @@
-
 článek - guided minimization
 
 meta@cesnet.cz
 update conda - rozjet to na META, permutation
-
-
 
 - open html from terminal, najít podle chyby ?
 xdg-open
@@ -13,10 +10,11 @@ metody minimalizace! nlopt
 předělat na default NEWUOU 
 
 
+lhs - numba
+
 Radka:
 -- cut-off - pořešit s Radkou
 html - napsat Radce, jestli nějake upravy ... 
-
 
 
 

@@ -15,7 +15,7 @@ def load_arguments():
     parser.add_argument("--new_parameters", help="File to store new parametes.")
     parser.add_argument("--method", help="Empirical method for calculation partial atomic charges.",
                         choices=("EEM", "SFKEEM", "QEq", "GM", "MGC", "SQE", "ACKS2"))
-    parser.add_argument("--optimization_method", help="Optimization method for parameterization.", choices=("minimization", "guided_minimization", "differential_evolution"))
+    parser.add_argument("--optimization_method", help="Optimization method for parameterization.", choices=("local_minimization", "guided_minimization", "differential_evolution"))
     parser.add_argument("--minimization_method", help="Minimization method for parameterization.", choices=("SLSQP", "NEWUOA"), default="SLSQP")
     parser.add_argument("--cpu", help="Only for optimization method guided minimization. Define number of used cpu for parameterization.", default=1, type=int)
     parser.add_argument("--num_of_samples", help="Only for optimization method guided minimization. Define how many initial samples are used.", default=5000, type=int)

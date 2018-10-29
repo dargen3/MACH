@@ -73,27 +73,21 @@ body {{font-family: Arial;}}
 <table border=1>
 {}
 </table>
-</br>
-<h2>Molecules:</h2>
-<table border=1>
-{}
-</table>    
+</br>   
 <h2>Atomic types:</h2>
 <table border=1>
 {}
-</table> 
-<tbody>
 </table>
-<table border=\"1\" style=\"margin-top: 0.5em\">
+<table border="1" style="margin-top: 0.5em">
 <tr>
 <td><strong>Legend:</strong> RMSD </td>
-<td style=\"background-color: green; color: white;\">&lt; 0.05</td>
-<td style=\"background-color: #4ca64c; \">&lt; 0.1</td>
-<td style=\"background-color: #99cc99;\">&lt; 0.15</td>
-<td style=\"background-color: yellow;\">&lt; 0.2</td>
-<td style=\"background-color: orange;\">&lt; 0.3</td>
-<td style=\"background-color: red; color: white;\">&lt; 0.4</td>
-<td style=\"background-color: darkred; color: white;\">&gt;= 0.4</td>
+<td style="background-color: green; color: white;">&lt; 0.05</td>
+<td style="background-color: #4ca64c; ">&lt; 0.1</td>
+<td style="background-color: #99cc99;">&lt; 0.15</td>
+<td style="background-color: yellow;">&lt; 0.2</td>
+<td style="background-color: orange;">&lt; 0.3</td>
+<td style="background-color: red; color: white;">&lt; 0.4</td>
+<td style="background-color: darkred; color: white;">&gt;= 0.4</td>
 </tr>
 </table>
 {}
@@ -111,10 +105,14 @@ body {{font-family: Arial;}}
 <table border=1>
 {}
 </table>
+<h2>Individual molecules:</h2>
+<table border=1>
+{}
+</table>
 </div>
 
 <div id="Parameterization informations" class="tabcontent">
-<font size=\"5\">{}</font> 
+<font size="5">{}</font> 
 </div>
 
 <div id="Parameters" class="tabcontent">
