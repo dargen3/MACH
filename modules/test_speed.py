@@ -1,4 +1,4 @@
-from .set_of_molecules import SetOfMolecules
+from .set_of_molecules import SetOfMolecules, SubsetOfMolecules
 from .control_existing import control_existing_files
 from importlib import import_module
 from termcolor import colored
@@ -7,13 +7,16 @@ from datetime import timedelta
 from pyDOE import lhs
 
 class TestSpeed:
-    def __init__(self, sdf, method, parameters):
+    def __init__(self, sdf, method, parameters, subset_heuristic):
         control_existing_files(((sdf, True, "file"),
                                 (parameters, True, "file")), False)
         method = getattr(import_module("modules.methods"), method)()
         method.load_parameters(parameters)
         set_of_molecules = SetOfMolecules(sdf)
-        method.create_method_data(set_of_molecules)
+        if subset_heuristic:
+            set_of_molecules = SubsetOfMolecules(set_of_molecules, method)
+        set_of_molecules.create_method_data(method)
+        print(len(set_of_molecules))
         print("Test of speed. Wait for 5 seconds, please... ")
         method.calculate(set_of_molecules)
         start = time()

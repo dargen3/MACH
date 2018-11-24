@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from termcolor import colored
+from numpy import random
 import warnings
 warnings.filterwarnings("ignore")
 from modules.arguments import load_arguments
@@ -15,6 +16,7 @@ from modules.test_speed import TestSpeed
 
 if __name__ == '__main__':
     args = load_arguments()
+    #random.seed(0)
     print(colored("\nMACH is running with mode: {}\n".format(args.mode), "blue"))
     if args.mode == "set_of_molecules_info":
         set_of_molecules = SetOfMolecules(args.sdf, args.num_of_molecules)
@@ -30,7 +32,8 @@ if __name__ == '__main__':
     if args.mode == "test_speed":
         TestSpeed(args.sdf,
                   args.method,
-                  args.parameters)
+                  args.parameters,
+                  args.subset_heuristic)
 
     if args.mode == "parameterization":
         Parameterization(args.sdf,
@@ -45,7 +48,8 @@ if __name__ == '__main__':
                          args.charges,
                          args.data_dir,
                          args.num_of_molecules,
-                         args.rewriting_with_force)
+                         args.rewriting_with_force,
+                         args.subset_heuristic)
 
     if args.mode == "comparison":
         Comparison(args.ref_charges,
@@ -61,7 +65,8 @@ if __name__ == '__main__':
                                    args.cpu,
                                    args.data_dir,
                                    args.num_of_molecules,
-                                   args.rewriting_with_force)
+                                   args.rewriting_with_force,
+                                   args.subset_heuristic)
 
 
     if args.mode == "calculation_meta":  # only for my usage
@@ -80,7 +85,9 @@ if __name__ == '__main__':
                               args.num_of_samples,
                               args.cpu,
                               args.RAM,
-                              args.walltime)
+                              args.walltime,
+                              args.subset_heuristic)
 
     if args.mode == "make_complete_html":
         make_complete_html()
+

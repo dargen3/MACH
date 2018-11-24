@@ -15,15 +15,35 @@
 </br>
 <h2>Atoms:</h2>
 <table border=1>
-{}
+<tr><th>RMSD</th><th>
+Maximum deviation</th><th>
+Average deviation</th><th>
+Pearson<sup>2</sup></th><th>
+Number of atoms</th></tr>
+<tr><td>{}</td></tr>
 </table>
 </br>
 <h2>Molecules:</h2>
 <table border=1>
-{}
+<tr><th>RMSD</th><th>
+Maximum deviation</th><th>
+Average deviation</th><th>
+Pearson<sup>2</sup></th><th>
+Number of molecules</th><th>
+Smallest molecule atoms</th><th>
+Largest molecule atoms</th><th>
+Average number of atoms</th></tr>
+<tr><td>{}</td></tr>
 </table>    
 <h2>Atomic types:</h2>
 <table border=1>
+<tr><th>Atomic type</th><th>
+RMSD</th><th>
+Maximum deviation</th><th>
+Average deviation</th><th>
+Pearson<sup>2</sup></th><th>
+Number of atoms</th><th>
+%</th></tr>
 {}
 </table> 
 <tbody>

@@ -26,7 +26,7 @@ class Calculation:
         method = getattr(import_module("modules.methods"), method)()
         method.load_parameters(parameters)
         set_of_molecules = SetOfMolecules(sdf)
-        method.create_method_data(set_of_molecules)
+        set_of_molecules.create_method_data(method)
         print("Calculation of charges... ")
         method.calculate(set_of_molecules)
         print(colored("ok\n", "green"))

@@ -3,7 +3,7 @@ from os import system
 from glob import glob
 from termcolor import colored
 
-def parameterization_meta(path, num_of_molecules, optimization_method, minimization_method, num_of_samples, cpu, RAM, walltime):  # only for my usage
+def parameterization_meta(path, num_of_molecules, optimization_method, minimization_method, num_of_samples, cpu, RAM, walltime, subset_heuristic):  # only for my usage
     print("Control path...")
     sdf_files = glob("{}*.sdf".format(path))
     par_files = glob("{}*.par".format(path))
@@ -22,6 +22,7 @@ def parameterization_meta(path, num_of_molecules, optimization_method, minimizat
         .format(method, optimization_method, minimization_method, basename(par_file), basename(sdf_file),
                 basename(ref_charges), new_par_file, charges, cpu, num_of_samples)
     command += " --num_of_molecules {}".format(num_of_molecules) if num_of_molecules else ""
+    command += " --subset_heuristic " if subset_heuristic else ""
     system("./modules/parameterization_meta.sh {} {} {} '{}' {} {} {}".format(par_file, sdf_file, ref_charges, command, cpu,
                                                             RAM, walltime))
 

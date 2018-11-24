@@ -4,7 +4,7 @@ from sys import exit
 from termcolor import colored
 from collections import Counter
 from tabulate import tabulate
-from numpy import array, float32
+from numpy import array, float32, int64, concatenate, random
 
 
 def sort(a, b):
@@ -50,7 +50,7 @@ class SetOfMolecules(ArciSet):
             elif type_of_sdf_record == "V3000":
                 self.load_sdf_v3000(molecule_data)
             else:
-                exit(colored("{} if not valid sdf file.\n".format(sdf), "red"))
+                exit(colored("{} is not valid sdf file.\n".format(sdf), "red"))
         self.num_of_atoms = sum([len(molecule) for molecule in self.molecules])
         print(colored("ok\n", "green"))
 
@@ -107,7 +107,7 @@ Number of bonds types: {}\n
         else:
             print(data)
 
-    def add_ref_charges(self, file, num_of_atomic_types, all_symbolic_numbers_atoms):
+    def add_ref_charges(self, file, num_of_atomic_types):
         with open(file, "r") as charges_file:
             names = [data.splitlines()[0] for data in charges_file.read().split("\n\n")[:-1]][:self.num_of_molecules]
             control_order_of_molecules(names, [molecule.name for molecule in self.molecules], file, self.file)
@@ -125,10 +125,48 @@ Number of bonds types: {}\n
                 molecule.charges = array(molecule_charges)
         self.ref_charges = array(charges, dtype=float32)
         atomic_types_charges = [[] for _ in range(num_of_atomic_types)]
-        for charge, symbolic_number in zip(self.ref_charges, all_symbolic_numbers_atoms):
+        for charge, symbolic_number in zip(self.ref_charges, self.all_symbolic_numbers_atoms):
             atomic_types_charges[symbolic_number].append(charge)
         self.ref_atomic_types_charges = array([array(chg, dtype=float32) for chg in atomic_types_charges])
         print(colored("ok\n", "green"))
+
+
+    def create_method_data(self, method):
+        self.all_num_of_atoms = array([molecule.num_of_atoms for molecule in self], dtype=int64)
+        self.all_symbolic_numbers_atoms = concatenate([molecule.symbolic_numbers_atoms(method) for molecule in self], axis=0)
+        if method.bond_types:
+            self.all_symbolic_numbers_bonds = concatenate([molecule.symbolic_numbers_bonds(self) for molecule in self], axis=0)
+        self.multiplied_all_symbolic_numbers_atoms = self.all_symbolic_numbers_atoms * len(method.atom_value_symbols)
+        for data in method.necessarily_data:
+            setattr(self, "all_" + data, concatenate([getattr(molecule, data)() for molecule in self], axis=0))
+
+
+class SubsetOfMolecules(SetOfMolecules):
+    def __init__(self, original_set_of_molecules, method):
+        self.molecules = []
+        atomic_types_counter = Counter()
+        ref_charges = []
+        index = 0
+        for molecule in random.permutation(original_set_of_molecules):
+            new_index = index + molecule.num_of_atoms
+            contain_atomic_types = set(molecule.atoms_representation(method.atomic_types_pattern))
+            for atomic_type in contain_atomic_types:
+                if atomic_types_counter[atomic_type] < 5:
+                    atomic_types_counter.update(contain_atomic_types)
+                    self.molecules.append(molecule)
+                    try:
+                        ref_charges.extend(original_set_of_molecules.ref_charges[index:new_index])
+                    except AttributeError:
+                        pass
+                    break
+            index = new_index
+        self.num_of_molecules = len(self.molecules)
+        self.ref_charges = array(ref_charges, dtype=float32)
+        super().create_method_data(method)
+        atomic_types_charges = [[] for _ in range(len(method.atomic_types))]
+        for charge, symbolic_number in zip(self.ref_charges, self.all_symbolic_numbers_atoms):
+            atomic_types_charges[symbolic_number].append(charge)
+        self.ref_atomic_types_charges = array([array(chg, dtype=float32) for chg in atomic_types_charges])
 
 
 class SetOfMoleculesFromChargesFile(ArciSet):

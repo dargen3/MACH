@@ -1,16 +1,36 @@
+škola!
+course of parameterization - pořešit, jestli tak nebo jinak
+
+
+
+
+
+
+
+
+vyzkoušet paralelizaci na meta... time consuming
+
+
+změnit lhsclassic na něco jiného?
+
+
+posunout bokeh plot vedle 
+
+
+
 článek - guided minimization
+
+
+
+
 
 meta@cesnet.cz
 update conda - rozjet to na META, permutation
 
-- open html from terminal, najít podle chyby ?
-xdg-open
 
 metody minimalizace! nlopt
 předělat na default NEWUOU 
 
-
-lhs - numba
 
 Radka:
 -- cut-off - pořešit s Radkou
@@ -24,6 +44,5 @@ v metodach není zahrnutý formal charge, defaultně je na nule
 odkaz na sdf - dat na readme!
 jednotlive metody - odkazy - dat na readme
 fixni hodnoty parametrů - bude potřeba?
-parametry z clanků
 
 

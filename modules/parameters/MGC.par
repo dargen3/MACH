@@ -1,0 +1,21 @@
+method: MGC
+length_type: Angstrom
+<<global>>
+<<key>>
+atomic_symbol
+high_bond
+<<value_symbol>>
+alfa
+<<value>>
+C   1   0.4877   
+C   2   0.4874     
+H   1   0.4861    
+N   1   0.493     
+N   2   0.489  
+O   1   2.231   
+O   2   2.0339    
+S   1   0.4862     
+S   2   0.4874    
+<<end>>
+
+

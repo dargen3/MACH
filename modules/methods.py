@@ -17,15 +17,6 @@ class Methods:
                                  "ACKS2": ["distances", "num_of_bonds_mul_two", "bonds_without_bond_type"]
                                  }[str(self)]
 
-    def create_method_data(self, set_of_molecules):
-        set_of_molecules.all_num_of_atoms = array([molecule.num_of_atoms for molecule in set_of_molecules], dtype=int64)
-        set_of_molecules.all_symbolic_numbers_atoms = concatenate([molecule.symbolic_numbers_atoms(self) for molecule in set_of_molecules], axis=0)
-        if self.bond_types:
-            set_of_molecules.all_symbolic_numbers_bonds = concatenate([molecule.symbolic_numbers_bonds(self) for molecule in set_of_molecules], axis=0)
-        set_of_molecules.multiplied_all_symbolic_numbers_atoms = set_of_molecules.all_symbolic_numbers_atoms * len(self.atom_value_symbols)
-        for data in self.necessarily_data:
-            setattr(set_of_molecules, "all_" + data, concatenate([getattr(molecule, data)() for molecule in set_of_molecules], axis=0))
-
     def control_parameters(self, file, all_symbolic_numbers_atoms):
         missing_atoms_in_parameters = [self.atomic_types[sym_num] for sym_num in range(len(self.atomic_types)) if sym_num not in all_symbolic_numbers_atoms]
         if missing_atoms_in_parameters:
@@ -36,6 +27,8 @@ class Methods:
 
     def load_parameters(self, parameters_file):
         print("Loading of parameters from {}...".format(parameters_file))
+        if not parameters_file:
+            parameters_file = "modules/parameters/{}.par".format(str(self))
         with open(parameters_file, "r") as parameters_file:
             parameters_file = parameters_file.read()
             for keyword in ["<<global>>", "<<key>>", "<<value_symbol>>", "<<value>>", "<<end>>"]:
