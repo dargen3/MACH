@@ -15,8 +15,6 @@ def control_existing_files(objects_data, rewriting_with_force):
     print("Control presence of files and directories {}... ".format(", ".join([object[0] for object in objects_data if object[0] is not None])))
     exit_status = False
     for object, presence, object_type in objects_data:
-        if object is None:
-            continue
         if not presence and rewriting_with_force:
             try:
                 if object_type == "file":
@@ -24,8 +22,7 @@ def control_existing_files(objects_data, rewriting_with_force):
                 elif object_type == "directory":
                     rmtree(object)
             except FileNotFoundError:
-                pass
-            continue
+                continue
         if data_existing(object, object_type) != presence:
             exit_status = True
             if presence:

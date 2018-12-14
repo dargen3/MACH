@@ -16,7 +16,7 @@ from modules.test_speed import TestSpeed
 
 if __name__ == '__main__':
     args = load_arguments()
-    #random.seed(0)
+    random.seed(0)
     print(colored("\nMACH is running with mode: {}\n".format(args.mode), "blue"))
     if args.mode == "set_of_molecules_info":
         set_of_molecules = SetOfMolecules(args.sdf, args.num_of_molecules)
@@ -44,12 +44,11 @@ if __name__ == '__main__':
                          args.num_of_samples,
                          args.cpu,
                          args.parameters,
-                         args.new_parameters,
-                         args.charges,
                          args.data_dir,
                          args.num_of_molecules,
                          args.rewriting_with_force,
-                         args.subset_heuristic)
+                         args.subset_heuristic,
+                         args.git_hash)
 
     if args.mode == "comparison":
         Comparison(args.ref_charges,

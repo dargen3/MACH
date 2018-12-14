@@ -4,7 +4,17 @@ from importlib import import_module
 from termcolor import colored
 from time import time
 from datetime import timedelta
-from pyDOE import lhs
+from numba import jit
+
+@jit(nopython=True, cache=True)
+def lhsclassic(n, samples, high_bond, low_bond):
+    random.seed(0)
+    cut = linspace(0, 1, samples + 1)
+    u = random.rand(samples, n)
+    for j in range(n):
+        u[random.permutation(arange(samples)), j] = u[:, j] * cut[1] + cut[:samples]
+    return u * abs(high_bond - low_bond) + low_bond
+
 
 class TestSpeed:
     def __init__(self, sdf, method, parameters, subset_heuristic):
@@ -34,7 +44,7 @@ class TestSpeed:
             print("Number of GM samples: {}".format(num_of_samples))
             print("Approximate time of GM without local minimizations: {}"
                   .format(str(timedelta(seconds=int(num_of_samples*one_calculation_time)))))
-            samples = lhs(len(method.parameters_values), samples=1000, criterion="c")
+            samples = lhsclassic(len(method.parameters_values), 1000, -3, 3)
             print("Total size of samples:  {}MB".format(int(samples.nbytes*num_of_samples/1000000000)))
             print()
             num_of_samples *= 10

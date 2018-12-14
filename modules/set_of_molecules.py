@@ -135,33 +135,25 @@ Number of bonds types: {}\n
         self.all_num_of_atoms = array([molecule.num_of_atoms for molecule in self], dtype=int64)
         self.all_symbolic_numbers_atoms = concatenate([molecule.symbolic_numbers_atoms(method) for molecule in self], axis=0)
         if method.bond_types:
-            self.all_symbolic_numbers_bonds = concatenate([molecule.symbolic_numbers_bonds(self) for molecule in self], axis=0)
-        self.multiplied_all_symbolic_numbers_atoms = self.all_symbolic_numbers_atoms * len(method.atom_value_symbols)
+            self.all_symbolic_numbers_bonds = concatenate([molecule.symbolic_numbers_bonds(method) for molecule in self], axis=0)
+        self.multiplied_all_symbolic_numbers_atoms = self.all_symbolic_numbers_atoms * len(method.atomic_parameters_types)
         for data in method.necessarily_data:
             setattr(self, "all_" + data, concatenate([getattr(molecule, data)() for molecule in self], axis=0))
 
 
 class SubsetOfMolecules(SetOfMolecules):
-    def __init__(self, original_set_of_molecules, method):
-        self.molecules = []
-        atomic_types_counter = Counter()
-        ref_charges = []
+    def __init__(self, original_set_of_molecules, method, percent):
+        self.num_of_molecules = int(len(original_set_of_molecules)/100*float(percent))
+        print("Creating of {}% subset of molecules which contain {} molecules...".format(percent, self.num_of_molecules))
+        mol_chg = []
         index = 0
-        for molecule in random.permutation(original_set_of_molecules):
+        for molecule in original_set_of_molecules:
             new_index = index + molecule.num_of_atoms
-            contain_atomic_types = set(molecule.atoms_representation(method.atomic_types_pattern))
-            for atomic_type in contain_atomic_types:
-                if atomic_types_counter[atomic_type] < 5:
-                    atomic_types_counter.update(contain_atomic_types)
-                    self.molecules.append(molecule)
-                    try:
-                        ref_charges.extend(original_set_of_molecules.ref_charges[index:new_index])
-                    except AttributeError:
-                        pass
-                    break
+            mol_chg.append((molecule, original_set_of_molecules.ref_charges[index: new_index]))
             index = new_index
-        self.num_of_molecules = len(self.molecules)
-        self.ref_charges = array(ref_charges, dtype=float32)
+        data = random.permutation(mol_chg)[:self.num_of_molecules]
+        self.molecules = [x[0] for x in data]
+        self.ref_charges = array([y for x in data for y in x[1]], dtype=float32)
         super().create_method_data(method)
         atomic_types_charges = [[] for _ in range(len(method.atomic_types))]
         for charge, symbolic_number in zip(self.ref_charges, self.all_symbolic_numbers_atoms):
@@ -184,7 +176,7 @@ class SetOfMoleculesFromChargesFile(ArciSet):
                 self.names.append(molecule[0][0])
                 atomic_symbols = [atom_line[1] for atom_line in molecule[2:]]
                 charges = array([float(atom_line[2]) for atom_line in molecule[2:]])
-                self.molecules.append(MoleculeChg(charges, molecule[0][0]))
+                self.molecules.append(MoleculeChg(charges, molecule[0][0], atomic_types=atomic_symbols))
                 for atomic_symbol, charge in zip(atomic_symbols, charges):
                     atomic_types_charges.setdefault(atomic_symbol, []).append(charge)
                 all_charges.extend(charges)

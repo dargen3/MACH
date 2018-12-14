@@ -7,9 +7,14 @@ from .bond import Bond
 
 
 class MoleculeChg:
-    def __init__(self, charges, name):
+    def __init__(self, charges, name, atomic_types=None):
         self.name = name
         self.charges = array(charges, dtype=float32)
+        if atomic_types:
+            self.atomic_types = sorted(set(atomic_types))
+
+    def atoms_representation(self, _):
+        return self.atomic_types
 
 
 def create_atom_high_bond(num_of_atoms, bonds, atomic_symbols):
@@ -84,3 +89,5 @@ class Molecule:
 
     def __len__(self):
         return self.num_of_atoms
+
+

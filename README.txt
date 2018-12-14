@@ -1,5 +1,26 @@
-škola!
-course of parameterization - pořešit, jestli tak nebo jinak
+hotovo - přidán course of parameters + interaktivita
+       - scipy solve - komplikované - odkazuje na blas, lapack...
+
+subset_of_molecules - kontrola
+
+parametry do jsonu - dodělat bond parameters
+
+
+
+bounds?
+
+
+radka - objektivní funkce
+
+ověřit kolik je dobré vzít nejlepších samplů. 
+spearmann korelační rank 
+xy corelační graf před - po
+
+
+num_of_samples heuristika
+
+
+jak velký subset? heuristika
 
 
 
@@ -7,34 +28,26 @@ course of parameterization - pořešit, jestli tak nebo jinak
 
 
 
-
-vyzkoušet paralelizaci na meta... time consuming
-
-
-změnit lhsclassic na něco jiného?
-
-
-posunout bokeh plot vedle 
-
-
-
-článek - guided minimization
+QEq co znamenají parametry
 
 
 
 
-
-meta@cesnet.cz
-update conda - rozjet to na META, permutation
+metody minimalizace
 
 
-metody minimalizace! nlopt
-předělat na default NEWUOU 
+všechno vypisovat, nastavit defaulty
 
 
-Radka:
--- cut-off - pořešit s Radkou
-html - napsat Radce, jestli nějake upravy ... 
+lhs z článku!!
+
+
+- napočítat vše pro všechny metody
+
+
+vápníky
+
+
 
 
 

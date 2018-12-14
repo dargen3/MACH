@@ -4,7 +4,7 @@ from numba import jit
 from numpy import float64, empty, array, ones, zeros, sqrt, cosh, concatenate, int64, sum, prod, dot
 from numpy.linalg import solve, eigvalsh
 from math import erf
-
+from json import load
 
 class Methods:
     def __init__(self):
@@ -14,7 +14,8 @@ class Methods:
                                  "GM": ["bonds_without_bond_type", "num_of_bonds_mul_two"],
                                  "MGC": ["MGC_matrix"],
                                  "SQE": ["distances", "num_of_bonds_mul_two", "bonds_without_bond_type"],
-                                 "ACKS2": ["distances", "num_of_bonds_mul_two", "bonds_without_bond_type"]
+                                 "ACKS2": ["distances", "num_of_bonds_mul_two", "bonds_without_bond_type"],
+                                 "DDACEM": ["distances"]
                                  }[str(self)]
 
     def control_parameters(self, file, all_symbolic_numbers_atoms):
@@ -22,67 +23,70 @@ class Methods:
         if missing_atoms_in_parameters:
             exit(colored("No {} atoms in {}. Parameterization is not possible.".format(", ".join(missing_atoms_in_parameters), file), "red"))
 
+    def convert_atom(self, atom):
+        if isinstance(atom, list):
+            if atom[1] == "hbo":
+                return "{}~{}".format(atom[0], atom[2])
+            elif atom[1] == "plain":
+                return atom[0]
+        elif isinstance(atom, str):
+            s_atom = atom.split("~")
+            if len(s_atom) == 2:
+                return [s_atom[0], "hbo", s_atom[1]]
+            elif len(s_atom) == 1:
+                return [atom, "plain", "*"]
+
+    def convert_bond(self, bond):
+        if isinstance(bond, list):
+            if bond[2] == "hbo":
+                return "bond-{}~{}".format("-".join(*sorted([bond[:2]])), bond[3])
+            elif bond[2] == "plain":
+                return "bond-{}-{}".format(*sorted([bond[:2]]))
+        elif isinstance(bond, str):
+            s_bond = bond.split("-")
+            if "~" in bond:
+                return [s_bond[1], s_bond[2].split("~")[0], "hbo", bond[-1]]
+            else:
+                return [*s_bond[1:3], "plain" ,"*"]
+
     def __repr__(self):
         return self.__class__.__name__
 
     def load_parameters(self, parameters_file):
-        print("Loading of parameters from {}...".format(parameters_file))
         if not parameters_file:
             parameters_file = "modules/parameters/{}.par".format(str(self))
-        with open(parameters_file, "r") as parameters_file:
-            parameters_file = parameters_file.read()
-            for keyword in ["<<global>>", "<<key>>", "<<value_symbol>>", "<<value>>", "<<end>>"]:
-                if keyword not in parameters_file:
-                    exit(colored("File with parameters is wrong! File not contain keywords <<global>>, <<key>>, "
-                                 "<<value_symbol>>, <<value>> and <<end>>!\n", "red"))
-            parameters_file = parameters_file.splitlines()
-            method_in_parameters_file = parameters_file[0].split()[1]
-            if self.__class__.__name__ != method_in_parameters_file:
-                exit(colored("These parameters are for method {} but you want to calculate charges by method {}!\n"
-                             .format(method_in_parameters_file, self.__class__.__name__), "red"))
-            length_corrections = {"Angstrom": 1.0, "Bohr_radius": 1.8897261245}
-            try:
-                self.length_correction_key = parameters_file[1].split()[1]
-                self.length_correction = length_corrections[self.length_correction_key]
-            except KeyError:
-                exit(colored("Unknown length type {} in parameter file. Please, choice one of {}.\n"
-                             .format(length_correction, ", ".join(length_corrections.keys())), "red"))
-            key_index = parameters_file.index("<<key>>")
-            value_symbol_index = parameters_file.index("<<value_symbol>>")
-            value_index = parameters_file.index("<<value>>")
-            end_index = parameters_file.index("<<end>>")
-            self.parameters = {}
-            for line in parameters_file[3: key_index]:
-                key, value = line.split()
-                self.parameters[key] = float64(value)
-            self.keys = [line for line in parameters_file[key_index + 1: value_symbol_index]]
-            self.atomic_types_pattern = "_".join([key for key in self.keys])
-            self.atom_value_symbols = [line for line in parameters_file[value_symbol_index + 1: value_index] if line[0] != "-"]
-            self.bond_value_symbols = [line for line in parameters_file[value_symbol_index + 1: value_index] if line[0] == "-"]
-            self.value_symbols = self.atom_value_symbols + self.bond_value_symbols
-            self.atomic_types = []
-            for line in parameters_file[value_index + 1: end_index]:
-                atomic_type_data = line.split()
-                atomic_type = "~".join(atomic_type_data[:len(self.keys)])
-                self.atomic_types.append(atomic_type)
-                for x in range(len(self.value_symbols)):
-                    parameter_value = atomic_type_data[x + len(self.keys)]
-                    if parameter_value == "X":
-                        continue
-                    if self.value_symbols[x][0] == "-":
-                        self.parameters["bond-{}".format("-".join(sorted([atomic_type, self.value_symbols[x][1:]])))] = float(parameter_value)
-                    else:
-                        self.parameters["{}_{}".format(atomic_type, self.value_symbols[x])] = float(parameter_value)
-        self.atomic_types = sorted(self.atomic_types)
+        print("Loading of parameters from {}...".format(parameters_file))
+        self.parameters_json = load(open(parameters_file))
+        method_in_parameters_file = self.parameters_json["metadata"]["method"]
+        if self.__class__.__name__ != method_in_parameters_file:
+            exit(colored("These parameters are for method {} but you want to calculate charges by method {}!\n"
+                         .format(method_in_parameters_file, self.__class__.__name__), "red"))
+        self.parameters = {}
+        if "common" in self.parameters_json:
+            print("\n\ntest\n\n")
+            for name, value in zip(self.parameters_json["common"]["names"], self.parameters_json["common"]["values"]):
+                self.parameters[name] = value
+        self.atomic_parameters_types = self.parameters_json["atom"]["names"]
+        atomic_types = []
+        for parameter in self.parameters_json["atom"]["data"]:
+            atomic_type = self.convert_atom(parameter["key"])
+            atomic_types.append(atomic_type)
+            for parameter_name, value in zip(self.atomic_parameters_types, parameter["value"]):
+                self.parameters["{}_{}".format(atomic_type, parameter_name)] = value
+        self.atomic_types = sorted(atomic_types)
+        if "bond" in self.parameters_json:
+            for parameter in self.parameters_json["bond"]["data"]:
+                self.parameters[self.convert_bond(parameter["key"])] = parameter["value"][0]
+        self.atomic_types_pattern = "atomic_symbol_high_bond" if self.parameters_json["atom"]["data"][0]["key"][1] == "hbo" else "atomic_symbol"
         self.bond_types = sorted([key for key in self.parameters.keys() if key[:5] == "bond-"])
-        parameters_values = [0 for _ in range(len(self.parameters))]
         writed_glob_par = -1
-        num_of_atom_par = len(self.atom_value_symbols) * len(self.atomic_types)
+        num_of_atom_par = len(self.atomic_parameters_types) * len(self.atomic_types)
+        parameters_values = [0 for _ in range(len(self.parameters))]
         self.key_index = {}
         for key, value in self.parameters.items():
             if key[0].isupper():
                 atomic_type, value_symbol = key.split("_")
-                index = self.atomic_types.index(atomic_type) * len(self.atom_value_symbols) + self.atom_value_symbols.index(value_symbol)
+                index = self.atomic_types.index(atomic_type) * len(self.atomic_parameters_types) + self.atomic_parameters_types.index(value_symbol)
                 parameters_values[index] = value
                 self.key_index[key] = index
             elif key[:5] == "bond-":
@@ -102,8 +106,19 @@ class Methods:
         for key in self.parameters.keys():
             parameters[key] = self.parameters_values[self.key_index[key]]
         self.parameters = parameters
+        if "common" in self.parameters_json:
+            for index, global_parameter in enumerate(self.parameters_json["common"]["names"]):
+                self.parameters_json["common"]["values"][index] = self.parameters[global_parameter]
+        for atomic_type in self.parameters_json["atom"]["data"]:
+            for index, parameter in enumerate(self.atomic_parameters_types):
+                atomic_type["value"][index] = self.parameters["{}_{}".format(self.convert_atom(atomic_type["key"]), parameter)]
+        if "bond" in self.parameters_json:
+            for bond in self.parameters_json["bond"]["data"]:
+                bond["value"] = self.parameters[self.convert_bond(bond["key"])]
+
 
 #####################################################################
+
 @jit(nopython=True, cache=True)
 def eem_calculate(distances, symbols, all_num_of_atoms, parameters_values):
     results = empty(symbols.size, dtype=float64)
@@ -129,6 +144,9 @@ def eem_calculate(distances, symbols, all_num_of_atoms, parameters_values):
         matrix[num_of_atoms, num_of_atoms] = 0.0
         vector[-1] = formal_charge
         results[index: new_index] = solve(matrix, vector)[:-1]
+        # mmm = max(abs(rrr))
+        # if mmm > 10:
+        #     print(mmm, cond(matrix))
         index = new_index
     return results
 
@@ -137,7 +155,6 @@ class EEM(Methods):
     def calculate(self, set_of_molecules):
         self.results = eem_calculate(set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms,
                                      set_of_molecules.all_num_of_atoms, self.parameters_values)
-
 
 ##########################################################################################
 @jit(nopython=True, cache=True)
@@ -415,5 +432,53 @@ class ACKS2(Methods):
 
 
 
+@jit(nopython=True)
+def ddacem_calculate(all_distances, all_symbols, all_num_of_atoms, parameters_values):
+    results = empty(all_symbols.size, dtype=float64)
+    index = 0
+    index_dist = 0
+    gchg = parameters_values[-2]
+    gel = parameters_values[-1]
+    for num_of_atoms in all_num_of_atoms:
+        new_index = index + num_of_atoms
+        new_index_dist = int(index_dist + num_of_atoms * (num_of_atoms - 1) /2)
+        symbols = all_symbols[index: new_index]
+        distances = all_distances[index_dist: new_index_dist]
+        DDAEs = zeros(num_of_atoms, dtype=float64)
+        actual_distance_index = 0
+        for j in range(num_of_atoms):
+            for i in range(j+1, num_of_atoms):
+                distance = distances[actual_distance_index]
+                actual_distance_index += 1
+                if distance < 2:
+                    DDAE = ((parameters_values[symbols[j]] - parameters_values[symbols[i]]) / distance)
+                    DDAEs[j] += DDAE
+                    DDAEs[i] -= DDAE
+        vector = zeros(num_of_atoms+1, dtype=float64)
+        for x in range(num_of_atoms):
+            vector[x] = parameters_values[symbols[x]+1] + DDAEs[x] * parameters_values[symbols[x]+2] + DDAEs[x] * gel
+        matrix = zeros((num_of_atoms+1, num_of_atoms+1), dtype=float64)
+        actual_distance_index = 0
+        for x in range(num_of_atoms):
+            matrix[x][x] += 1
+            matrix[x][num_of_atoms] = matrix[num_of_atoms][x] = 1
+            for y in range(x+1, num_of_atoms):
+                distance = distances[actual_distance_index]
+                if distance < 5:
+                    matrix[x][x] -= gchg/(distance**2)
+                    matrix[y][y] -= gchg/(distance**2)
+                    matrix[x][y] += gchg/(distance**2)
+                    matrix[y][x] += gchg/(distance**2)
+                actual_distance_index += 1
+        matrix[num_of_atoms][num_of_atoms] = 1
+        charges = solve(matrix, vector)[:-1]
+        results[index: new_index] = charges
+        index = new_index
+        index_dist = new_index_dist
+    return results
 
 
+class DDACEM(Methods):
+    def calculate(self, set_of_molecules):
+        self.results = ddacem_calculate(set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms,
+                                     set_of_molecules.all_num_of_atoms, self.parameters_values)
