@@ -4,7 +4,7 @@ from sys import exit
 from termcolor import colored
 from .atom import Atom
 from .bond import Bond
-
+from numba import jit
 
 class MoleculeChg:
     def __init__(self, charges, name, atomic_types=None):
@@ -19,11 +19,7 @@ class MoleculeChg:
 
 def create_atom_high_bond(num_of_atoms, bonds, atomic_symbols):
     highest_bonds = [1] * num_of_atoms
-    for bond in bonds:
-        bond_type = bond[1]
-        atoms = bond[0]
-        atom1 = atoms[0] - 1
-        atom2 = atoms[1] - 1
+    for (atom1, atom2), bond_type in bonds:
         if highest_bonds[atom1] < bond_type:
             highest_bonds[atom1] = bond_type
         if highest_bonds[atom2] < bond_type:
@@ -40,32 +36,26 @@ class Molecule:
             self.atoms.append(Atom(x, y, z, atomic_symbol, symbol_high_bond, index))
         self.bonds = []
         for (a1, a2), type in bonds:
-            self.bonds.append(Bond(self.atoms[a1-1], self.atoms[a2-1], type))
+            self.bonds.append(Bond(self.atoms[a1], self.atoms[a2], type))
 
     @property
     def atomic_coordinates(self):
         return array([atom.coordinates for atom in self.atoms], dtype=float32)
 
     def bonds_representation(self, representation):
-        return [bond.get_reprezentation(representation) for bond in self.bonds]
+        return [bond.get_representation(representation) for bond in self.bonds]
 
     def atoms_representation(self, pattern):
-        return [atom.get_reprezentation(pattern) for atom in self.atoms]
+        return [atom.get_representation(pattern) for atom in self.atoms]
 
     def distances(self):
         return array([value for index, line in enumerate(spatial.distance.cdist(self.atomic_coordinates, self.atomic_coordinates)) for value in line[index + 1:]], dtype=float32)
 
     def symbolic_numbers_atoms(self, method):
-        try:
-            return array([method.atomic_types.index(atomic_type) for atomic_type in self.atoms_representation(method.atomic_types_pattern)], dtype=int16)
-        except ValueError as VE:
-            exit(colored("{} atomic type is not defined in parameters.".format(str(VE).split()[0][1:-1]), "red"))
+        return array([method.atomic_types.index(atomic_type) for atomic_type in self.atoms_representation(method.atomic_types_pattern)], dtype=int16)
 
     def symbolic_numbers_bonds(self, method):
-        try:
-            return array([method.bond_types.index("bond-{}".format(bond)) for bond in self.bonds_representation("atomic_symbol_high_bond_atomic_symbol_high_bond")], dtype=int16)
-        except ValueError as VE:
-            exit(colored("{} bond type is not defined in parameters.".format(str(VE).split()[0][1:-1]), "red"))
+        return array([method.bond_types.index("bond-{}".format(bond)) for bond in self.bonds_representation("{}_{}".format(method.atomic_types_pattern, method.atomic_types_pattern))], dtype=int16)
 
     def bonds_without_bond_type(self):
         return concatenate(self.bonds_representation("index_index"))

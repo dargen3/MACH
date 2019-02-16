@@ -13,10 +13,21 @@ from modules.calculation_meta import calculation_meta  # only for my usage
 from modules.parameterization_meta import parameterization_meta
 from modules.make_complete_html import make_complete_html
 from modules.test_speed import TestSpeed
+from modules.clusterization import clusterize
+from numba import jit
+import nlopt
+
+@jit(nopython=True, cache=True)
+def numba_seed(seed):
+    random.seed(seed)
+
 
 if __name__ == '__main__':
     args = load_arguments()
-    random.seed(0)
+    if args.random_seed != 0:
+        random.seed(args.random_seed)
+        numba_seed(args.random_seed)
+        nlopt.srand(args.random_seed)
     print(colored("\nMACH is running with mode: {}\n".format(args.mode), "blue"))
     if args.mode == "set_of_molecules_info":
         set_of_molecules = SetOfMolecules(args.sdf, args.num_of_molecules)
@@ -48,6 +59,7 @@ if __name__ == '__main__':
                          args.num_of_molecules,
                          args.rewriting_with_force,
                          args.subset_heuristic,
+                         args.atomic_types_pattern,
                          args.git_hash)
 
     if args.mode == "comparison":
@@ -65,7 +77,8 @@ if __name__ == '__main__':
                                    args.data_dir,
                                    args.num_of_molecules,
                                    args.rewriting_with_force,
-                                   args.subset_heuristic)
+                                   args.subset_heuristic,
+                                   args.atomic_types_pattern)
 
 
     if args.mode == "calculation_meta":  # only for my usage
@@ -85,8 +98,12 @@ if __name__ == '__main__':
                               args.cpu,
                               args.RAM,
                               args.walltime,
-                              args.subset_heuristic)
+                              args.subset_heuristic,
+                              args.atomic_types_pattern,
+                              args.method)
 
     if args.mode == "make_complete_html":
         make_complete_html()
 
+    elif args.mode == "clusterization":
+        clusterize(args.charges, args.sdf)

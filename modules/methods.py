@@ -1,87 +1,156 @@
 from sys import exit
 from termcolor import colored
 from numba import jit
-from numpy import float64, empty, array, ones, zeros, sqrt, cosh, concatenate, int64, sum, prod, dot
+from numpy import float64, empty, array, ones, zeros, sqrt, cosh, concatenate, int64, sum, prod, dot, delete, insert
 from numpy.linalg import solve, eigvalsh
 from math import erf
 from json import load
+from collections import Counter
+from random import random
+
+def convert_atom(atom):
+    if isinstance(atom, list):
+        if atom[1] == "hbo":
+            return "{}~{}".format(atom[0], atom[2])
+        elif atom[1] == "plain":
+            return atom[0]
+        #elif atom[1] == "aba"
+        #    return "{}~{}.{}".format(atom[0], atom[2], atom[3])
+    elif isinstance(atom, str):
+        #if "." in atom:
+        #    s_atom = atom.split("~")
+        #    h = s_atom[0].split(".")
+        #    return [s_atom[0], "aba", h[0], h[1]]
+        s_atom = atom.split("~")
+        if len(s_atom) == 2:
+            return [s_atom[0], "hbo", s_atom[1]]
+        elif len(s_atom) == 1:
+            return [atom, "plain", "*"]
+
+
+def convert_bond(bond):
+    if isinstance(bond, list):
+        if bond[2] == "hbo":
+            return "bond-{}~{}".format("-".join(*sorted([bond[:2]])), bond[3])
+        elif bond[2] == "plain":
+            return "bond-{}-{}".format(*sorted([bond[:2]]))
+    elif isinstance(bond, str):
+        s_bond = bond.split("-")
+        if "~" in bond:
+            return [s_bond[0], s_bond[1].split("~")[0], "hbo", bond[-1]]
+        else:
+            return [*s_bond[1:3], "plain", "*"]
+
+
 
 class Methods:
     def __init__(self):
         self.necessarily_data = {"EEM": ["distances"],
+                                 "EEMfixed": ["distances"],
                                  "QEq": ["distances"],
                                  "SFKEEM": ["distances"],
                                  "GM": ["bonds_without_bond_type", "num_of_bonds_mul_two"],
                                  "MGC": ["MGC_matrix"],
                                  "SQE": ["distances", "num_of_bonds_mul_two", "bonds_without_bond_type"],
                                  "ACKS2": ["distances", "num_of_bonds_mul_two", "bonds_without_bond_type"],
-                                 "DDACEM": ["distances"]
                                  }[str(self)]
-
-    def control_parameters(self, file, all_symbolic_numbers_atoms):
-        missing_atoms_in_parameters = [self.atomic_types[sym_num] for sym_num in range(len(self.atomic_types)) if sym_num not in all_symbolic_numbers_atoms]
-        if missing_atoms_in_parameters:
-            exit(colored("No {} atoms in {}. Parameterization is not possible.".format(", ".join(missing_atoms_in_parameters), file), "red"))
-
-    def convert_atom(self, atom):
-        if isinstance(atom, list):
-            if atom[1] == "hbo":
-                return "{}~{}".format(atom[0], atom[2])
-            elif atom[1] == "plain":
-                return atom[0]
-        elif isinstance(atom, str):
-            s_atom = atom.split("~")
-            if len(s_atom) == 2:
-                return [s_atom[0], "hbo", s_atom[1]]
-            elif len(s_atom) == 1:
-                return [atom, "plain", "*"]
-
-    def convert_bond(self, bond):
-        if isinstance(bond, list):
-            if bond[2] == "hbo":
-                return "bond-{}~{}".format("-".join(*sorted([bond[:2]])), bond[3])
-            elif bond[2] == "plain":
-                return "bond-{}-{}".format(*sorted([bond[:2]]))
-        elif isinstance(bond, str):
-            s_bond = bond.split("-")
-            if "~" in bond:
-                return [s_bond[1], s_bond[2].split("~")[0], "hbo", bond[-1]]
-            else:
-                return [*s_bond[1:3], "plain" ,"*"]
 
     def __repr__(self):
         return self.__class__.__name__
 
-    def load_parameters(self, parameters_file):
+    def load_parameters(self, parameters_file, set_of_molecules, mode, atomic_types_pattern=None):
         if not parameters_file:
-            parameters_file = "modules/parameters/{}.par".format(str(self))
+            parameters_file = "modules/parameters/{}.json".format(str(self))
         print("Loading of parameters from {}...".format(parameters_file))
         self.parameters_json = load(open(parameters_file))
+        if atomic_types_pattern:
+            self.atomic_types_pattern = atomic_types_pattern
+        elif self.parameters_json["atom"]["data"][0]["key"][1] == "hbo":
+            self.atomic_types_pattern = "atomic_symbol_high_bond"
+        elif self.parameters_json["atom"]["data"][0]["key"][1] == "plain":
+            self.atomic_types_pattern = "atomic_symbol"
         method_in_parameters_file = self.parameters_json["metadata"]["method"]
         if self.__class__.__name__ != method_in_parameters_file:
             exit(colored("These parameters are for method {} but you want to calculate charges by method {}!\n"
                          .format(method_in_parameters_file, self.__class__.__name__), "red"))
+        self.atomic_parameters_types = self.parameters_json["atom"]["names"]
+        set_of_molecules_atoms = set([atom for molecule in set_of_molecules for atom in molecule.atoms_representation(self.atomic_types_pattern)])
+        json_parameters_atoms = [parameters["key"] for parameters in self.parameters_json["atom"]["data"]]
+        if "bond" in self.parameters_json:
+            bond_pattern = "{}_{}".format(self.atomic_types_pattern, self.atomic_types_pattern)
+            set_of_molecules_bonds = set([bond for molecule in set_of_molecules for bond in molecule.bonds_representation(bond_pattern)])
+            json_parameters_bonds = [parameters["key"] for parameters in self.parameters_json["bond"]["data"]]
+        if mode == "calculation":
+            missing_atoms = []
+            for atom in set_of_molecules_atoms:
+                converted_atom = convert_atom(atom)
+                if converted_atom not in json_parameters_atoms:
+                    if "fixed" in self.parameters_json:
+                        if atom not in self.parameters_json["fixed"].keys():
+                            missing_atoms.append(atom)
+                    else:
+                        missing_atoms.append(atom)
+            if missing_atoms:
+                print(colored("Atomic type(s) {} is not defined in parameters.".format(", ".join(missing_atoms)), "red"))
+            if "bond" in self.parameters_json:
+                missing_bonds = []
+                for bond in set_of_molecules_bonds:
+                    converted_bond = convert_bond(bond)
+                    if converted_bond not in json_parameters_bonds:
+                        missing_bonds.append(bond)
+                if missing_bonds:
+                    exit(colored("Bond type(s) {} is not defined in parameters.".format(", ".join(missing_bonds)), "red"))
+            if missing_atoms:
+                exit()
+        elif mode == "parameterization":
+            for atom in set_of_molecules_atoms:
+                converted_atom = convert_atom(atom)
+                if converted_atom not in json_parameters_atoms:
+                    self.parameters_json["atom"]["data"].append({"key": converted_atom, "value": [random() for _ in range(len(self.atomic_parameters_types))]})
+                    print(colored("Atom {} was added to parameters.".format(atom), "yellow"))
+                else:
+                    json_parameters_atoms.remove(converted_atom)
+            for atom in json_parameters_atoms:
+                for parameter in self.parameters_json["atom"]["data"]:
+                    if parameter["key"] == atom:
+                        self.parameters_json["atom"]["data"].remove(parameter)
+                print(colored("Atom {} was deleted from parameters.".format(atom), "yellow"))
+            if "bond" in self.parameters_json:
+                for bond in set_of_molecules_bonds:
+                    converted_bond = convert_bond(bond)
+                    if converted_bond not in json_parameters_bonds:
+                        self.parameters_json["bond"]["data"].append({"key": converted_bond, "value": [random()]})
+                        print(colored("Bond {} was added to parameters.".format(bond) ,"yellow"))
+                    else:
+                        json_parameters_bonds.remove(converted_bond)
+                for bond in json_parameters_bonds:
+                    for parameter in self.parameters_json["bond"]["data"]:
+                        if parameter["key"] == bond:
+                            self.parameters_json["bond"]["data"].remove(parameter)
+                    print(colored("Bond {} was deleted from parameters.".format(convert_bond(bond)[5:]) ,"yellow"))
+
         self.parameters = {}
         if "common" in self.parameters_json:
-            print("\n\ntest\n\n")
             for name, value in zip(self.parameters_json["common"]["names"], self.parameters_json["common"]["values"]):
                 self.parameters[name] = value
-        self.atomic_parameters_types = self.parameters_json["atom"]["names"]
         atomic_types = []
         for parameter in self.parameters_json["atom"]["data"]:
-            atomic_type = self.convert_atom(parameter["key"])
+            atomic_type = convert_atom(parameter["key"])
             atomic_types.append(atomic_type)
             for parameter_name, value in zip(self.atomic_parameters_types, parameter["value"]):
                 self.parameters["{}_{}".format(atomic_type, parameter_name)] = value
+        if "fixed" in self.parameters_json:
+            atomic_types.extend(self.parameters_json["fixed"].keys())
         self.atomic_types = sorted(atomic_types)
         if "bond" in self.parameters_json:
             for parameter in self.parameters_json["bond"]["data"]:
-                self.parameters[self.convert_bond(parameter["key"])] = parameter["value"][0]
-        self.atomic_types_pattern = "atomic_symbol_high_bond" if self.parameters_json["atom"]["data"][0]["key"][1] == "hbo" else "atomic_symbol"
+                self.parameters[convert_bond(parameter["key"])] = parameter["value"][0]
         self.bond_types = sorted([key for key in self.parameters.keys() if key[:5] == "bond-"])
         writed_glob_par = -1
         num_of_atom_par = len(self.atomic_parameters_types) * len(self.atomic_types)
         parameters_values = [0 for _ in range(len(self.parameters))]
+        if "fixed" in self.parameters_json:
+            parameters_values.extend([0 for x in range(2*len(self.parameters_json["fixed"]))])
         self.key_index = {}
         for key, value in self.parameters.items():
             if key[0].isupper():
@@ -98,6 +167,7 @@ class Methods:
                 self.key_index[key] = writed_glob_par
                 writed_glob_par -= 1
         self.parameters_values = array(parameters_values, dtype=float64)
+        self.bounds = [(min(self.parameters_values), max(self.parameters_values))] * len(self.parameters_values)
         print(colored("ok\n", "green"))
 
     def new_parameters(self, new_parameters):
@@ -111,10 +181,10 @@ class Methods:
                 self.parameters_json["common"]["values"][index] = self.parameters[global_parameter]
         for atomic_type in self.parameters_json["atom"]["data"]:
             for index, parameter in enumerate(self.atomic_parameters_types):
-                atomic_type["value"][index] = self.parameters["{}_{}".format(self.convert_atom(atomic_type["key"]), parameter)]
+                atomic_type["value"][index] = self.parameters["{}_{}".format(convert_atom(atomic_type["key"]), parameter)]
         if "bond" in self.parameters_json:
             for bond in self.parameters_json["bond"]["data"]:
-                bond["value"] = self.parameters[self.convert_bond(bond["key"])]
+                bond["value"][0] = self.parameters[convert_bond(bond["key"])]
 
 
 #####################################################################
@@ -156,7 +226,67 @@ class EEM(Methods):
         self.results = eem_calculate(set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms,
                                      set_of_molecules.all_num_of_atoms, self.parameters_values)
 
+
 ##########################################################################################
+
+class EEMfixed(Methods):
+    def calculate(self, set_of_molecules):
+        try:
+            fixed_atoms_symbols = [self.atomic_types.index(x) for x in self.parameters_json["fixed"].keys()]
+        except:
+            fixed_atoms_symbols = []
+        distances, symbols, all_num_of_atoms, parameters_values = set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms,                            set_of_molecules.all_num_of_atoms, self.parameters_values
+        results = empty(symbols.size, dtype=float64)
+        kappa = parameters_values[-1]
+        index = 0
+        counter_distance = 0
+        counter_symbols = 0
+        for num_of_atoms in all_num_of_atoms:
+            new_index = index + num_of_atoms
+            num_of_atoms_add_1 = num_of_atoms + 1
+            matrix = empty((num_of_atoms_add_1, num_of_atoms_add_1), dtype=float64)
+            vector = empty(num_of_atoms_add_1, dtype=float64)
+            fixed_atoms_index = []
+            for x in range(num_of_atoms):
+                matrix[num_of_atoms][x] = matrix[x][num_of_atoms] = 1.0
+                symbol = symbols[counter_symbols]
+                if symbol/2 in fixed_atoms_symbols:
+                    fixed_atoms_index.append([x, symbol])
+                counter_symbols += 1
+                matrix[x][x] = parameters_values[symbol + 1]
+                vector[x] = -parameters_values[symbol]
+                for y in range(x + 1, num_of_atoms):
+                    matrix[x][y] = matrix[y][x] = kappa / distances[counter_distance]
+                    counter_distance += 1
+            matrix[num_of_atoms, num_of_atoms] = 0.0
+            for fixed_atom in fixed_atoms_index[::]:
+                vector -= matrix[:,fixed_atom[0]]
+            vector = delete(vector, [fixed_atom[0] for fixed_atom in fixed_atoms_index], axis=0)
+            matrix = delete(matrix, [fixed_atom[0] for fixed_atom in fixed_atoms_index], axis=0)
+            matrix = delete(matrix, [fixed_atom[0] for fixed_atom in fixed_atoms_index], axis=1)
+            vector[-1] = 0
+            for fixed_atom in fixed_atoms_index:
+                vector[-1] -= self.parameters_json["fixed"][self.atomic_types[int(fixed_atom[1]/2)]]
+            res = solve(matrix, vector)[:-1]
+            for fixed_atom in fixed_atoms_index:
+                res = insert(res, fixed_atom[0], self.parameters_json["fixed"][self.atomic_types[int(fixed_atom[1]/2)]])
+            results[index: new_index] = res
+            index = new_index
+        self.results = results
+
+
+
+
+
+
+
+
+
+
+
+
+
+#######################################################################################
 @jit(nopython=True, cache=True)
 def sfkeem_calculate(distances, symbols, all_num_of_atoms, parameters_values):
     results = empty(symbols.size, dtype=float64)
@@ -429,56 +559,3 @@ class ACKS2(Methods):
 
 
 
-
-
-
-@jit(nopython=True)
-def ddacem_calculate(all_distances, all_symbols, all_num_of_atoms, parameters_values):
-    results = empty(all_symbols.size, dtype=float64)
-    index = 0
-    index_dist = 0
-    gchg = parameters_values[-2]
-    gel = parameters_values[-1]
-    for num_of_atoms in all_num_of_atoms:
-        new_index = index + num_of_atoms
-        new_index_dist = int(index_dist + num_of_atoms * (num_of_atoms - 1) /2)
-        symbols = all_symbols[index: new_index]
-        distances = all_distances[index_dist: new_index_dist]
-        DDAEs = zeros(num_of_atoms, dtype=float64)
-        actual_distance_index = 0
-        for j in range(num_of_atoms):
-            for i in range(j+1, num_of_atoms):
-                distance = distances[actual_distance_index]
-                actual_distance_index += 1
-                if distance < 2:
-                    DDAE = ((parameters_values[symbols[j]] - parameters_values[symbols[i]]) / distance)
-                    DDAEs[j] += DDAE
-                    DDAEs[i] -= DDAE
-        vector = zeros(num_of_atoms+1, dtype=float64)
-        for x in range(num_of_atoms):
-            vector[x] = parameters_values[symbols[x]+1] + DDAEs[x] * parameters_values[symbols[x]+2] + DDAEs[x] * gel
-        matrix = zeros((num_of_atoms+1, num_of_atoms+1), dtype=float64)
-        actual_distance_index = 0
-        for x in range(num_of_atoms):
-            matrix[x][x] += 1
-            matrix[x][num_of_atoms] = matrix[num_of_atoms][x] = 1
-            for y in range(x+1, num_of_atoms):
-                distance = distances[actual_distance_index]
-                if distance < 5:
-                    matrix[x][x] -= gchg/(distance**2)
-                    matrix[y][y] -= gchg/(distance**2)
-                    matrix[x][y] += gchg/(distance**2)
-                    matrix[y][x] += gchg/(distance**2)
-                actual_distance_index += 1
-        matrix[num_of_atoms][num_of_atoms] = 1
-        charges = solve(matrix, vector)[:-1]
-        results[index: new_index] = charges
-        index = new_index
-        index_dist = new_index_dist
-    return results
-
-
-class DDACEM(Methods):
-    def calculate(self, set_of_molecules):
-        self.results = ddacem_calculate(set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms,
-                                     set_of_molecules.all_num_of_atoms, self.parameters_values)

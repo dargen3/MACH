@@ -6,11 +6,10 @@ from collections import Counter
 from tabulate import tabulate
 from numpy import array, float32, int64, concatenate, random
 
-
 def sort(a, b):
     if a > b:
-        return b, a
-    return a, b
+        return b-1, a-1
+    return a-1, b-1
 
 class ArciSet:
     def __init__(self, file):
@@ -83,7 +82,7 @@ class SetOfMolecules(ArciSet):
             bonds.append((sort(int(line[4]), int(line[5])), int(line[3])))
         self.molecules.append(Molecule(name, num_of_atoms, atomic_symbols, atomic_coordinates, bonds))
 
-    def info(self, atomic_types_pattern, file=None):  # file only for my usage
+    def info(self, atomic_types_pattern):
         counter_atoms = Counter()
         counter_bonds = Counter()
         for molecule in self.molecules:
@@ -101,11 +100,7 @@ Number of bonds:       {}
 Number of bonds types: {}\n
 {}\n""".format(self.file, self.num_of_molecules, self.num_of_atoms, len(counter_atoms),
            tabulate(table_atoms, headers=["Type", "Number", "%"]), num_of_bonds, len(counter_bonds), tabulate(table_bonds, headers=["Type", "Number", "%"]))
-        if file: # only for my usage
-            with open(file, "w") as data_file:
-                data_file.write(data)
-        else:
-            print(data)
+        print(data)
 
     def add_ref_charges(self, file, num_of_atomic_types):
         with open(file, "r") as charges_file:
@@ -142,24 +137,59 @@ Number of bonds types: {}\n
 
 
 class SubsetOfMolecules(SetOfMolecules):
-    def __init__(self, original_set_of_molecules, method, percent):
-        self.num_of_molecules = int(len(original_set_of_molecules)/100*float(percent))
-        print("Creating of {}% subset of molecules which contain {} molecules...".format(percent, self.num_of_molecules))
+    def __init__(self, original_set_of_molecules, method, subset):
+        print("Creating of subset of molecules...")
         mol_chg = []
         index = 0
         for molecule in original_set_of_molecules:
             new_index = index + molecule.num_of_atoms
             mol_chg.append((molecule, original_set_of_molecules.ref_charges[index: new_index]))
             index = new_index
-        data = random.permutation(mol_chg)[:self.num_of_molecules]
-        self.molecules = [x[0] for x in data]
-        self.ref_charges = array([y for x in data for y in x[1]], dtype=float32)
+        counter_atoms = Counter()
+        molecules = []
+        ref_charges = []
+        for molecule, charges in random.permutation(mol_chg):
+            atoms = molecule.atoms_representation(method.atomic_types_pattern)
+            if any(counter_atoms[atom] < subset for atom in atoms):
+                counter_atoms.update(atoms)
+                molecules.append(molecule)
+                ref_charges.append(charges)
+            if all(counter_atoms[x] > subset for x in method.atomic_types):
+                break
+        self.molecules = []
+        self.ref_charges = []
+        counter_atoms = Counter()
+        for molecule, charges in zip(molecules[::-1], ref_charges[::-1]):
+            atoms = molecule.atoms_representation(method.atomic_types_pattern)
+            if any(counter_atoms[atom] < subset for atom in atoms):
+                counter_atoms.update(atoms)
+                self.molecules.append(molecule)
+                self.ref_charges.append(charges)
+            if all(counter_atoms[x] > subset for x in method.atomic_types):
+                break
+        if method.bond_types:
+            counter_bonds = Counter()
+            bond_format = "{}_{}".format(method.atomic_types_pattern, method.atomic_types_pattern)
+            for molecule, charges in zip(self.molecules, self.ref_charges):
+                bonds = molecule.bonds_representation(bond_format)
+                counter_bonds.update(bonds)
+            if len(counter_bonds) != len(method.bond_types):
+                for molecule, charges in random.permutation(mol_chg):
+                    bonds = molecule.bonds_representation(bond_format)
+                    if any(counter_bonds[bond] < 1 for bond in bonds):
+                        counter_bonds.update(bonds)
+                        self.molecules.append(molecule)
+                        self.ref_charges.append(charges)
+                    if len(counter_bonds) == len(method.bond_types):
+                        break
+        self.ref_charges = array([y for x in self.ref_charges for y in x], dtype=float32)
+        self.num_of_molecules = len(self.molecules)
         super().create_method_data(method)
         atomic_types_charges = [[] for _ in range(len(method.atomic_types))]
         for charge, symbolic_number in zip(self.ref_charges, self.all_symbolic_numbers_atoms):
             atomic_types_charges[symbolic_number].append(charge)
         self.ref_atomic_types_charges = array([array(chg, dtype=float32) for chg in atomic_types_charges])
-
+        print("Subset of molecules contain {} molecules.".format(self.num_of_molecules))
 
 class SetOfMoleculesFromChargesFile(ArciSet):
     def __init__(self, file, ref=True):

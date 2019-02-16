@@ -11,7 +11,7 @@ class Atom:
     def coordinates(self):
         return self.x, self.y, self.z
 
-    def get_reprezentation(self, pattern):
+    def get_representation(self, pattern):
         if pattern == "atomic_symbol":
             return self.atomic_symbol
         elif pattern == "atomic_symbol_high_bond":

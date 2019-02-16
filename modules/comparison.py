@@ -15,19 +15,17 @@ from bokeh.palettes import Category20
 from bokeh.resources import INLINE
 from bokeh.util.browser import view
 from bokeh.embed import components
-from bokeh.models import Legend, HoverTool
+from bokeh.models import Legend, HoverTool, Range1d
+from bokeh.models.widgets import Panel, Tabs
 from operator import itemgetter
 import csv
 from shutil import copyfile
-
-
 
 
 def background_color(value):
     return "green" if value < 0.05 else "#4ca64c" if value < 0.1 else "#99cc99" if value < 0.15\
         else "yellow" if value < 0.2 else "orange" if value < 0.3 else "red; color: white" if value < 0.4\
         else "darkred; color: white"
-
 
 def delete_unrealistic_value_from_course(minimization):
     x_coordinates = []
@@ -49,10 +47,11 @@ def calculate_statistics(ref_charges, charges):
 
 
 class Comparison:
-    def __init__(self, ref_charges_data, charges_data, data_dir, rewriting_with_force, parameterization=False, course=None, course_parameters=None):
+    def __init__(self, ref_charges_data, charges_data, data_dir, rewriting_with_force, parameterization=False, course=None, course_parameters=None, nums_of_atoms=None):
         self.data_dir = data_dir
         self.parameterization = parameterization
         if self.parameterization:
+            self.nums_of_atoms = nums_of_atoms
             self.course = course
             self.course_parameters = course_parameters
             set_of_molecules_nt = namedtuple("set_of_molecules", ("all_charges", "atomic_types_charges", "molecules"))
@@ -111,7 +110,56 @@ class Comparison:
 
     def graphs(self):
         print("Creating pictures...")
+        color_numbers = {"H~1": 0, "O~1": 2, "O~2": 4, "N~1": 6, "N~2": 8, "C~1": 10, "C~2": 12, "S~1": 14,
+                         "Ca~1": 16, "S~2": 18, "P~1": 1, "P~2": 3, "N~3": 5, "C~3": 7, "Br~1": 9, "Cl~1": 11,
+                         "F~1": 13, "I~1": 15, "H": 0, "C": 2, "N": 4, "O": 6, "S": 8, "I": 10, "F": 12, "Br": 14, "Cl": 16, "P": 18, "Ca": 1}
+        cg = figure(plot_width=900,
+                   plot_height=900,
+                   title="Correlation graph",
+                   x_axis_label="Reference charges",
+                   y_axis_label="Empirical Charges",
+                   output_backend="webgl")
+        cg.title.align = "center"
+        cg.title.text_font_size = "25px"
+        cg.xaxis.axis_label_text_font_size = "20px"
+        cg.yaxis.axis_label_text_font_size = "20px"
+
+        cg.line([-1000,1000], [-1000, 1000])
+
+        zipped_charges = list(zip(self.ref_set_of_molecules.atomic_types_charges.items(),
+                                      self.set_of_molecules.atomic_types_charges.items()))
+        for (atomic_symbol, ref_charges), (_, charges) in zipped_charges:
+            color = Category20[20][color_numbers[atomic_symbol]]
+            cg.circle(ref_charges, charges, size=6, legend=atomic_symbol, fill_color=color, line_color=color)
+        cg.legend.location = "top_left"
+        cg.legend.click_policy = "hide"
+        max_charge = max((max(self.ref_set_of_molecules.ref_charges), max(self.set_of_molecules.all_charges)))
+        min_charge = min((min(self.ref_set_of_molecules.ref_charges), min(self.set_of_molecules.all_charges)))
+        corr = (max_charge - min_charge) / 10
+        min_charge -= corr
+        max_charge += corr
+        cg.x_range = Range1d(min_charge, max_charge)
+        cg.y_range = Range1d(min_charge, max_charge)
         if self.parameterization:
+            validation = figure(plot_width=900,
+                                plot_height=900,
+                                title="Correlation graph - validation",
+                                x_axis_label="Reference charges",
+                                y_axis_label="Empirical Charges",
+                                output_backend="webgl")
+            validation.title.align = "center"
+            validation.title.text_font_size = "25px"
+            validation.xaxis.axis_label_text_font_size = "20px"
+            validation.yaxis.axis_label_text_font_size = "20px"
+            validation.line([-1000, 1000], [-1000, 1000])
+            validation.circle(self.ref_set_of_molecules.ref_charges[:self.nums_of_atoms], self.set_of_molecules.all_charges[:self.nums_of_atoms], size=6, legend="Parameterized", fill_color="black", line_color="black")
+            validation.circle(self.ref_set_of_molecules.ref_charges[self.nums_of_atoms:], self.set_of_molecules.all_charges[self.nums_of_atoms:], size=6, legend="Validation", fill_color="red", line_color="red")
+            validation.legend.location = "top_left"
+            validation.legend.click_policy = "hide"
+            validation.x_range = Range1d(min_charge, max_charge)
+            validation.y_range = Range1d(min_charge, max_charge)
+            self.validation_graph_html_source = validation
+
             c = figure(plot_width=900,
                        plot_height=900,
                        title="Course of minimization",
@@ -142,8 +190,7 @@ class Comparison:
                        plot_height=900,
                        title="Course of minimization",
                        x_axis_label="Step",
-                       y_axis_label="Value",
-                       y_range=(-0.1, 1.1))
+                       y_axis_label="Value")
             p.title.align = "center"
             p.title.text_font_size = "25px"
             p.xaxis.axis_label_text_font_size = "20px"
@@ -165,28 +212,9 @@ class Comparison:
                                             ('Value', '@y'),
                                             ('Step', '@x')]))
             self.course_parameters = p
-
-        color_numbers = {"H~1": 0, "O~1": 2, "O~2": 4, "N~1": 6, "N~2": 8, "C~1": 10, "C~2": 12, "S~1": 14,
-                         "Ca~1": 16, "S~2": 18, "P~1": 1, "P~2": 3, "N~3": 5, "C~3": 7, "Br~1": 9, "Cl~1": 11,
-                         "F~1": 13, "I~1": 15, "H": 0, "C": 2, "N": 4, "O": 6, "S": 8, "I": 10, "F": 12, "Br": 14, "Cl": 16, "P": 18}
-        cg = figure(plot_width=900,
-                   plot_height=900,
-                   title="Correlation graph",
-                   x_axis_label="Reference charges",
-                   y_axis_label="Empirical Charges",
-                   output_backend="webgl")
-        cg.title.align = "center"
-        cg.title.text_font_size = "25px"
-        cg.xaxis.axis_label_text_font_size = "20px"
-        cg.yaxis.axis_label_text_font_size = "20px"
-        zipped_charges = list(zip(self.ref_set_of_molecules.atomic_types_charges.items(),
-                                      self.set_of_molecules.atomic_types_charges.items()))
-        for (atomic_symbol, ref_charges), (_, charges) in zipped_charges:
-            color = Category20[20][color_numbers[atomic_symbol]]
-            cg.circle(ref_charges, charges, size=6, legend=atomic_symbol, fill_color=color, line_color=color)
-        cg.legend.location = "top_left"
-        cg.legend.click_policy = "hide"
-        self.correlation_graph_html_source = cg
+            self.correlation_graph_html_source = Tabs(tabs=[Panel(child=cg, title="Corelation"), Panel(child=self.validation_graph_html_source, title="Validation")])
+        else:
+            self.correlation_graph_html_source = cg
         print(colored("ok\n", "green"))
 
     def write_html_comparison(self, charges_file, ref_charges_file, output_file):
