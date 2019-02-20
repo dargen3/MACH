@@ -54,10 +54,10 @@ def clusterize(charges_file, sdf_file):
     charges_names = [data.splitlines()[0] for data in open(charges_file, "r").read().split("\n\n")[:-1]]
     control_order_of_molecules(charges_names, [molecule.name for molecule in set_of_molecules], charges_file, sdf_file)
     set_of_molecules_chg = SetOfMoleculesFromChargesFile(charges_file)
-    atomic_type_pattern = "atomic_symbol"
+    atomic_type_pattern = "atomic_symbol_high_bond"
     atomic_types = sorted(list(set(functools.reduce(operator.iconcat, [molecule.atoms_representation(atomic_type_pattern) for molecule in set_of_molecules], []))))
 
-
+    """
     all_atomic_data = []
     for molecule in set_of_molecules:
         molecule_atoms_reprezentation = molecule.atoms_representation(atomic_type_pattern)
@@ -78,7 +78,7 @@ def clusterize(charges_file, sdf_file):
     print(len(counter))
     from pprint import pprint ; pprint(counter.most_common())
     from sys import exit ; exit()
-
+    """
 
 
 

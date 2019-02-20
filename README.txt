@@ -1,3 +1,27 @@
+rozdělit jak tabulku tak graf!
+
+
+latech
+overleaf fi thesis
+
+minimalization second kouknout na grafy
+
+
+zaokroulhit kandidates na 3 desetinná místa a provest spearmanna - provedeno - nic moc
+
+
+ 
+projet clusterization, clustering, součet??
+problem atomových typů - matice? jiná metoda? Hranice 
+EEMfixed
+
+redukce dimenzí - PCA
+
+
+osnova
+
+redukce dimenzí
+
 
 
 

@@ -27,10 +27,9 @@ def load_arguments():
     parser.add_argument("--RAM", help="For parameterization_meta and calculation_meta only. Define max. RAM usage for META job in GB.", default=10, type=int)  # only for my usage
     parser.add_argument("--walltime", help="For parameterization_meta and calculation_meta only. Define max time for META job in hours.", default=10, type=int)  # only for my usage
     parser.add_argument("--git_hash", help="For internal usage only.")  # only for my usage
-    parser.add_argument("--atomic_type", help="Define atomic type for clusterization.")
     parser.add_argument("--atomic_types_pattern",
                         help="For mode set_of_molecules_info and parameterization. Define atomic types for statistics",
-                        choices=("atomic_symbol", "atomic_symbol_high_bond"), default="atomic_symbol_high_bond")
+                        choices=("atomic_symbol", "atomic_symbol_high_bond", "atomic_symbol_high_bond_bonded_atoms", "atomic_symbol_bonded_atoms"), default="atomic_symbol_high_bond")
     parser.add_argument("--num_of_molecules", help="Only these number of molecules will be loaded.", type=int)
     parser.add_argument("-f", "--rewriting_with_force", action="store_true",
                         help="All existed files with the same names like your outputs will be replaced.")

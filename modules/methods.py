@@ -14,13 +14,17 @@ def convert_atom(atom):
             return "{}~{}".format(atom[0], atom[2])
         elif atom[1] == "plain":
             return atom[0]
-        #elif atom[1] == "aba"
-        #    return "{}~{}.{}".format(atom[0], atom[2], atom[3])
+        elif atom[1] == "aba":
+            return "{}~{}.{}".format(atom[0], atom[2], atom[3])
+        elif atom[1] == "abaa":
+            return "{}#{}".format(atom[0], atom[2])
     elif isinstance(atom, str):
-        #if "." in atom:
-        #    s_atom = atom.split("~")
-        #    h = s_atom[0].split(".")
-        #    return [s_atom[0], "aba", h[0], h[1]]
+        if "." in atom:
+            sp = atom.split(".")
+            return [atom.split("~")[0], "aba", sp[0].split("~")[1], sp[1]]
+        elif "_" in atom:
+            sp = atom.split("_")
+            return [sp[0], "abaa", sp[1]]
         s_atom = atom.split("~")
         if len(s_atom) == 2:
             return [s_atom[0], "hbo", s_atom[1]]
@@ -58,17 +62,12 @@ class Methods:
     def __repr__(self):
         return self.__class__.__name__
 
-    def load_parameters(self, parameters_file, set_of_molecules, mode, atomic_types_pattern=None):
+    def load_parameters(self, parameters_file, set_of_molecules, mode, atomic_types_pattern):
         if not parameters_file:
             parameters_file = "modules/parameters/{}.json".format(str(self))
         print("Loading of parameters from {}...".format(parameters_file))
         self.parameters_json = load(open(parameters_file))
-        if atomic_types_pattern:
-            self.atomic_types_pattern = atomic_types_pattern
-        elif self.parameters_json["atom"]["data"][0]["key"][1] == "hbo":
-            self.atomic_types_pattern = "atomic_symbol_high_bond"
-        elif self.parameters_json["atom"]["data"][0]["key"][1] == "plain":
-            self.atomic_types_pattern = "atomic_symbol"
+        self.atomic_types_pattern = atomic_types_pattern
         method_in_parameters_file = self.parameters_json["metadata"]["method"]
         if self.__class__.__name__ != method_in_parameters_file:
             exit(colored("These parameters are for method {} but you want to calculate charges by method {}!\n"

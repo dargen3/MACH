@@ -128,8 +128,11 @@ class Comparison:
 
         zipped_charges = list(zip(self.ref_set_of_molecules.atomic_types_charges.items(),
                                       self.set_of_molecules.atomic_types_charges.items()))
-        for (atomic_symbol, ref_charges), (_, charges) in zipped_charges:
-            color = Category20[20][color_numbers[atomic_symbol]]
+        for index, ((atomic_symbol, ref_charges), (_, charges)) in enumerate(zipped_charges):
+            try:
+                color = Category20[20][color_numbers[atomic_symbol]]
+            except KeyError:
+                color = Category20[20][index%20]
             cg.circle(ref_charges, charges, size=6, legend=atomic_symbol, fill_color=color, line_color=color)
         cg.legend.location = "top_left"
         cg.legend.click_policy = "hide"
