@@ -27,7 +27,7 @@ class ArciSet:
 
 
 class SetOfMolecules(ArciSet):
-    def __init__(self, file, num_of_molecules=None):
+    def __init__(self, file, num_of_molecules_from=None, num_of_molecules_to=None):
         print("Loading of set of molecules from {}...".format(file))
         super().__init__(file)
         with open(file, "r") as sdf:
@@ -36,13 +36,17 @@ class SetOfMolecules(ArciSet):
             exit(colored("{} is not valid sdf file. Last line is not $$$$.\n".format(sdf.name), "red"))
         molecules_data = [x.splitlines() for x in molecules_data.split("$$$$\n")]
         num_of_all_molecules = len(molecules_data) - 1
-        if not num_of_molecules:
-            self.num_of_molecules = num_of_all_molecules
+        if not num_of_molecules_to:
+            self.num_of_molecules_to = num_of_all_molecules
         else:
-            if num_of_molecules > num_of_all_molecules:
+            if num_of_molecules_to > num_of_all_molecules:
                 exit(colored(("ERROR! Number of molecules is only {}!".format(num_of_all_molecules)), "red"))
-            self.num_of_molecules = num_of_molecules
-        for molecule_data in molecules_data[:self.num_of_molecules]:
+            self.num_of_molecules_to = num_of_molecules_to
+        if not num_of_molecules_from:
+            self.num_of_molecules_from = 0
+        else:
+            self.num_of_molecules_from = num_of_molecules_from
+        for molecule_data in molecules_data[self.num_of_molecules_from:self.num_of_molecules_to]:
             type_of_sdf_record = molecule_data[3][-5:]
             if type_of_sdf_record == "V2000":
                 self.load_sdf_v2000(molecule_data)
@@ -98,18 +102,18 @@ Number of atoms types: {}\n
 {}\n\n
 Number of bonds:       {}
 Number of bonds types: {}\n
-{}\n""".format(self.file, self.num_of_molecules, self.num_of_atoms, len(counter_atoms),
+{}\n""".format(self.file, len(self.molecules), self.num_of_atoms, len(counter_atoms),
            tabulate(table_atoms, headers=["Type", "Number", "%"]), num_of_bonds, len(counter_bonds), tabulate(table_bonds, headers=["Type", "Number", "%"]))
         print(data)
 
     def add_ref_charges(self, file, num_of_atomic_types):
         with open(file, "r") as charges_file:
-            names = [data.splitlines()[0] for data in charges_file.read().split("\n\n")[:-1]][:self.num_of_molecules]
+            names = [data.splitlines()[0] for data in charges_file.read().split("\n\n")[:-1]][self.num_of_molecules_from:self.num_of_molecules_to]
             control_order_of_molecules(names, [molecule.name for molecule in self.molecules], file, self.file)
         print("Loading charges from {}...".format(file))
         with open(file, "r") as charges_file:
             charges = []
-            for molecule_data, molecule in zip(charges_file.read().split("\n\n")[:-1], self.molecules):
+            for molecule_data, molecule in zip(charges_file.read().split("\n\n")[:-1][self.num_of_molecules_from:self.num_of_molecules_to], self.molecules):
                 molecule_charges = []
                 for line in molecule_data.splitlines():
                     try:

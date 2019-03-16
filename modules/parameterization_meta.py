@@ -4,30 +4,17 @@ from glob import glob
 from termcolor import colored
 import git
 
-def parameterization_meta(path, num_of_molecules, optimization_method, minimization_method, num_of_samples, cpu, RAM, walltime, subset_heuristic, atomic_types_pattern, method=None):  # only for my usage
-    print("Control path...")
-    sdf_files = glob("{}*.sdf".format(path))
-    chg_files = glob("{}*.chg".format(path))
-    if method is None:
-        for charges_file in chg_files:
-            if len(basename(charges_file).split("_")) == 2:
-                method = basename(charges_file).split("_")[1].split(".")[0]
-                break
-    if len(sdf_files) != 1 or len(chg_files) != 2:
-        exit(colored("There is not 1 parameters file, 1 sdf file and 2 charges files in {}!".format(path), "red"))
-    print(colored("ok\n", "green"))
-    sdf_file = sdf_files[0]
-    par_file = "modules/parameters/{}.json".format(method)
-    ref_charges = "{}.chg".format(sdf_file[:-4])
-    charges = "{}_{}.chg".format(basename(sdf_file)[:-4], method)
+
+def parameterization_meta(sdf_file, ref_charges, parameters, method, optimization_method, minimization_method, atomic_types_pattern, num_of_molecules, num_of_samples, subset_heuristic, validation, cpu, RAM, walltime):  # only for my usage
+    if not parameters:
+        parameters = "modules/parameters/{}.json".format(method)
     command = "./mach.py --mode parameterization --method {} --optimization_method {} --minimization_method {} --parameters {} --sdf {} --ref_charges {} " \
-              " --data_dir results_data --charges {} --cpu {} --git_hash {} --atomic_types_pattern {} " \
-        .format(method, optimization_method, minimization_method, basename(par_file), basename(sdf_file),
-                basename(ref_charges), charges, cpu, git.Repo(search_parent_directories=True).head.object.hexsha, atomic_types_pattern)
+              " --data_dir results_data --cpu {} --git_hash {} --atomic_types_pattern {} --subset_heuristic {} --num_of_samples {} --validation {} " \
+        .format(method, optimization_method, minimization_method, basename(parameters), basename(sdf_file),
+                basename(ref_charges), cpu, git.Repo(search_parent_directories=True).head.object.hexsha,
+                atomic_types_pattern, subset_heuristic, num_of_samples, validation)
     command += " --num_of_molecules {}".format(num_of_molecules) if num_of_molecules else ""
-    command += " --subset_heuristic {}".format(subset_heuristic) if subset_heuristic else ""
-    command += " --num_of_samples {}".format(num_of_samples) if num_of_samples else ""
-    system("./modules/parameterization_meta.sh {} {} {} '{} > /dev/null' {} {} {}".format(par_file, sdf_file, ref_charges, command, cpu,
+    system("./modules/parameterization_meta.sh {} {} {} '{}' {} {} {}".format(parameters, sdf_file, ref_charges, command, cpu,
                                                             RAM, walltime))
 
 

@@ -1,12 +1,12 @@
 from sys import exit
 from termcolor import colored
 from numba import jit
-from numpy import float64, empty, array, ones, zeros, sqrt, cosh, concatenate, int64, sum, prod, dot, delete, insert
+from numpy import float64, empty, array, ones, zeros, sqrt, cosh, concatenate, int64, sum, prod, dot, delete, insert, random
 from numpy.linalg import solve, eigvalsh
 from math import erf
 from json import load
 from collections import Counter
-from random import random
+
 
 def convert_atom(atom):
     if isinstance(atom, list):
@@ -14,17 +14,17 @@ def convert_atom(atom):
             return "{}~{}".format(atom[0], atom[2])
         elif atom[1] == "plain":
             return atom[0]
-        elif atom[1] == "aba":
-            return "{}~{}.{}".format(atom[0], atom[2], atom[3])
-        elif atom[1] == "abaa":
-            return "{}#{}".format(atom[0], atom[2])
+        #elif atom[1] == "aba":
+        #    return "{}~{}.{}".format(atom[0], atom[2], atom[3])
+        #elif atom[1] == "abaa":
+        #    return "{}#{}".format(atom[0], atom[2])
     elif isinstance(atom, str):
-        if "." in atom:
-            sp = atom.split(".")
-            return [atom.split("~")[0], "aba", sp[0].split("~")[1], sp[1]]
-        elif "_" in atom:
-            sp = atom.split("_")
-            return [sp[0], "abaa", sp[1]]
+        #if "." in atom:
+        #    sp = atom.split(".")
+        #    return [atom.split("~")[0], "aba", sp[0].split("~")[1], sp[1]]
+        #elif "_" in atom:
+        #    sp = atom.split("_")
+        #    return [sp[0], "abaa", sp[1]]
         s_atom = atom.split("~")
         if len(s_atom) == 2:
             return [s_atom[0], "hbo", s_atom[1]]
@@ -34,16 +34,17 @@ def convert_atom(atom):
 
 def convert_bond(bond):
     if isinstance(bond, list):
+        bond_atoms = "-".join(*sorted([bond[:2]]))
         if bond[2] == "hbo":
-            return "bond-{}~{}".format("-".join(*sorted([bond[:2]])), bond[3])
+            return "bond-{}-{}".format(bond_atoms, bond[3])
         elif bond[2] == "plain":
-            return "bond-{}-{}".format(*sorted([bond[:2]]))
+            return "bond-{}".format(bond_atoms)
     elif isinstance(bond, str):
         s_bond = bond.split("-")
         if "~" in bond:
-            return [s_bond[0], s_bond[1].split("~")[0], "hbo", bond[-1]]
+            return [s_bond[0], s_bond[1], "hbo", bond[-1]]
         else:
-            return [*s_bond[1:3], "plain", "*"]
+            return [s_bond[0], s_bond[1], "plain", "*"]
 
 
 
@@ -105,7 +106,7 @@ class Methods:
             for atom in set_of_molecules_atoms:
                 converted_atom = convert_atom(atom)
                 if converted_atom not in json_parameters_atoms:
-                    self.parameters_json["atom"]["data"].append({"key": converted_atom, "value": [random() for _ in range(len(self.atomic_parameters_types))]})
+                    self.parameters_json["atom"]["data"].append({"key": converted_atom, "value": [random.random() for _ in range(len(self.atomic_parameters_types))]})
                     print(colored("Atom {} was added to parameters.".format(atom), "yellow"))
                 else:
                     json_parameters_atoms.remove(converted_atom)
@@ -113,12 +114,12 @@ class Methods:
                 for parameter in self.parameters_json["atom"]["data"]:
                     if parameter["key"] == atom:
                         self.parameters_json["atom"]["data"].remove(parameter)
-                print(colored("Atom {} was deleted from parameters.".format(atom), "yellow"))
+                print(colored("Atom {} was deleted from parameters.".format(convert_atom(atom)), "yellow"))
             if "bond" in self.parameters_json:
                 for bond in set_of_molecules_bonds:
                     converted_bond = convert_bond(bond)
                     if converted_bond not in json_parameters_bonds:
-                        self.parameters_json["bond"]["data"].append({"key": converted_bond, "value": [random()]})
+                        self.parameters_json["bond"]["data"].append({"key": converted_bond, "value": [random.random()]})
                         print(colored("Bond {} was added to parameters.".format(bond) ,"yellow"))
                     else:
                         json_parameters_bonds.remove(converted_bond)
@@ -188,6 +189,9 @@ class Methods:
 
 #####################################################################
 
+from numpy.linalg import inv
+from numpy import dot
+
 @jit(nopython=True, cache=True)
 def eem_calculate(distances, symbols, all_num_of_atoms, parameters_values):
     results = empty(symbols.size, dtype=float64)
@@ -213,9 +217,6 @@ def eem_calculate(distances, symbols, all_num_of_atoms, parameters_values):
         matrix[num_of_atoms, num_of_atoms] = 0.0
         vector[-1] = formal_charge
         results[index: new_index] = solve(matrix, vector)[:-1]
-        # mmm = max(abs(rrr))
-        # if mmm > 10:
-        #     print(mmm, cond(matrix))
         index = new_index
     return results
 
@@ -347,8 +348,8 @@ def qeq_calculate(distances, all_symbols, all_num_of_atoms, parameters_values):
             symbol = symbols[i]
             matrix[i][i] = parameters_values[symbol + 1]
             vector[i] = -parameters_values[symbol]
+            rad1 = vector_rad[i] # změna!
             for j in range(i + 1, num_of_atoms):
-                rad1 = vector_rad[i]
                 rad2 = vector_rad[j]
                 distance = distances[counter_distance]
                 matrix[i][j] = matrix[j][i] = erf(sqrt(rad1 * rad2 / (rad1 + rad2)) * distance) / distance
@@ -431,62 +432,33 @@ def mgc_calculate(all_num_of_atoms, all_mgc_matrix, all_symbols, parameters_valu
 
 class MGC(Methods):
     def calculate(self, set_of_molecules):
-        self.results = mgc_calculate(set_of_molecules.all_num_of_atoms, set_of_molecules.all_MGC_matrix, set_of_molecules.multiplied_all_symbolic_numbers_atoms, self.parameters_values)
+        # self.results = mgc_calculate(set_of_molecules.all_num_of_atoms, set_of_molecules.all_MGC_matrix, set_of_molecules.multiplied_all_symbolic_numbers_atoms, self.parameters_values)
+        self.results = []
+        from time import time
+        start = time()
+        for molecule in set_of_molecules:
+            matrix = zeros((molecule.num_of_atoms, molecule.num_of_atoms), dtype=float64)
+            for x in range(molecule.num_of_atoms):
+                matrix[x][x] = 1
+            for atom1, atom2, bond_type in molecule.bonds_representation("index_index_type"):
+                matrix[atom1][atom1] += bond_type
+                matrix[atom2][atom2] += bond_type
+                matrix[atom1][atom2] -= bond_type
+                matrix[atom2][atom1] -= bond_type
 
 
-#####################################################################################
-@jit(nopython=True)
-def sqe_calculate(all_bonds, distances, all_symbols_atoms, all_symbols_bonds, all_num_of_atoms, all_num_of_bonds, parameters_values, num_of_bond_types):
-    results = empty(all_symbols_atoms.size, dtype=float64)
-    index_b = 0
-    index_a = 0
-    counter_distance = 0
-    bond_parameters_values = parameters_values[-num_of_bond_types:]
-    for num_of_atoms, num_of_bonds in zip(all_num_of_atoms, all_num_of_bonds):
-        new_index_b = index_b + num_of_bonds
-        new_index_a = index_a + num_of_atoms
-        symbols_atoms = all_symbols_atoms[index_a: new_index_a]
-        symbols_bonds = all_symbols_bonds[int(index_b/2): int(new_index_b/2)]
-        T = zeros((int(num_of_bonds/2), num_of_atoms))
-        bonds = all_bonds[index_b: new_index_b]
-        for index, bond_index in enumerate(range(0, len(bonds), 2)):
-            atom1, atom2 = bonds[bond_index: bond_index + 2]
-            T[index, atom1] += 1
-            T[index, atom2] -= 1
-        matrix = zeros((num_of_atoms, num_of_atoms))
-        vector = zeros(num_of_atoms)
-        list_of_q0 = empty(num_of_atoms, dtype=float64)
-        list_of_eta = empty(num_of_atoms, dtype=float64)
-        for i in range(num_of_atoms):
-            symbol = symbols_atoms[i]
-            matrix[i][i] = parameters_values[symbol + 1]
-            list_of_eta[i] = parameters_values[symbol + 1]
-            vector[i] = -parameters_values[symbol]
-            list_of_q0[i] = parameters_values[symbol + 3]
-            for j in range(i+1, num_of_atoms):
-                d = distances[counter_distance]
-                counter_distance += 1
-                d0 = sqrt(2*parameters_values[symbol + 2]**2 + 2*parameters_values[symbols_atoms[j] +2]**2)
-                if d0 == 0:
-                    matrix[i,j] = matrix[j,i] = 1.0/d
-                else:
-                    matrix[i,j] = matrix[j,i] = erf(d/d0)/d
-        vector -= dot(matrix, list_of_q0)
-        vector += list_of_eta*list_of_q0
-        A_sqe = dot(T, dot(matrix, T.T))
-        B_sqe = dot(T, vector)
-        for index, b_sym in enumerate(symbols_bonds):
-            A_sqe[index, index] += bond_parameters_values[b_sym]
-        results[index_a: new_index_a] = dot(solve(A_sqe, B_sqe), T) + list_of_q0
-        index_a = new_index_a
-        index_b = new_index_b
-    return results
+
+            vector = empty(molecule.num_of_atoms, dtype=float64)
+            for index, atom in enumerate(molecule.atoms):
+                vector[index] = self.parameters[atom.hbo + "_a"]
+            r = (solve(matrix, vector) - vector) / (prod(vector) ** (1 / molecule.num_of_atoms))
+            for x in r:
+                self.results.append(x)
+        print(time()- start)
+        from sys import exit
+        exit()
 
 
-class SQE(Methods):
-    def calculate(self, set_of_molecules):
-        self.results = sqe_calculate(set_of_molecules.all_bonds_without_bond_type, set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms, set_of_molecules.all_symbolic_numbers_bonds,
-                       set_of_molecules.all_num_of_atoms, set_of_molecules.all_num_of_bonds_mul_two, self.parameters_values, len(self.bond_types))
 
 
 ##############################################################################################
@@ -509,14 +481,15 @@ def acks2_calculate(all_bonds, distances, all_symbols_atoms, all_symbols_bonds, 
         list_of_eta = empty(num_of_atoms, dtype=float64)
         for i in range(num_of_atoms):
             symbol = symbols_atoms[i]
-            matrix[i][i] = parameters_values[symbol + 1]
-            list_of_eta[i] = parameters_values[symbol + 1]
+            ddd = parameters_values[symbol + 1]
+            matrix[i][i] = ddd
+            list_of_eta[i] = ddd
             vector[i] = -parameters_values[symbol]
             list_of_q0[i] = parameters_values[symbol + 3]
             for j in range(i+1, num_of_atoms):
                 d = distances[counter_distance]
                 counter_distance += 1
-                d0 = sqrt(2*parameters_values[symbol + 2]**2 + 2*parameters_values[symbols_atoms[j] +2]**2)
+                d0 = sqrt(2*parameters_values[symbol + 2]**2 + 2*parameters_values[symbols_atoms[j] + 2]**2)
                 if d0 == 0:
                     matrix[i,j] = matrix[j,i] = 1.0/d
                 else:
@@ -550,9 +523,7 @@ def acks2_calculate(all_bonds, distances, all_symbols_atoms, all_symbols_bonds, 
 class ACKS2(Methods):
     def calculate(self, set_of_molecules):
         self.results = acks2_calculate(set_of_molecules.all_bonds_without_bond_type, set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms, set_of_molecules.all_symbolic_numbers_bonds,
-                       set_of_molecules.all_num_of_atoms, set_of_molecules.all_num_of_bonds_mul_two, self.parameters_values, len(self.bond_types))
-
-
+                                       set_of_molecules.all_num_of_atoms, set_of_molecules.all_num_of_bonds_mul_two, self.parameters_values, len(self.bond_types))
 
 
 

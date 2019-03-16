@@ -17,24 +17,21 @@ from datetime import timedelta
 from os import path, mkdir
 from shutil import copyfile
 import nlopt
-from numpy import sum, sqrt, abs, max, array_split, linalg, array, linspace, random, arange, mean, empty, isnan
+from numpy import sum, sqrt, abs, max, array_split, linalg, array, linspace, random, arange, mean, empty, isnan, float32
 import heapq
 import git
 from json import dumps
 
 def local_minimization(input_parameters, minimization_method, method, set_of_molecules):
-    course = []
-    course_parameters = []
-
-    if str(method) in ["EEM","SFKEEM", "QEq", "GM", "MGC"]:
-        bounds = [[0.1,100000] for _ in range(len(input_parameters))]
+    if str(method) in ["SFKEEM", "QEq", "MGC"]:
+        bounds = [[0.000001,100000] for _ in range(len(input_parameters))]
     else:
         bounds = [[-100000,100000] for _ in range(len(input_parameters))]
 
 
     res = minimize(calculate_charges_and_statistical_data, input_parameters, method=minimization_method, options={"maxiter": 10000}, bounds=bounds,
-                   args=(method, set_of_molecules, course, course_parameters))
-    return res.fun, res.x, course, course_parameters
+                   args=(method, set_of_molecules))
+    return res.fun, res.x
 
     """
     if minimization_method in ["Nelder-Mead", "Powell", "CG", "BFGS", "L-BFGS-B", "TNC", "COBYLA", "SLSQP"]:
@@ -121,7 +118,7 @@ def rmsd_calculation_molecules(all_num_of_atoms, results, ref_charges):
         index = new_index
     return total_molecules_rmsd/all_num_of_atoms.size
 
-def calculate_charges_and_statistical_data(list_of_parameters, method, set_of_molecules, course=None, course_parameters=None):
+def calculate_charges_and_statistical_data(list_of_parameters, method, set_of_molecules):
     method.parameters_values = list_of_parameters
     try:
         method.calculate(set_of_molecules)
@@ -133,44 +130,29 @@ def calculate_charges_and_statistical_data(list_of_parameters, method, set_of_mo
                          for index, atomic_type_charges in enumerate(set_of_molecules.ref_atomic_types_charges)]
     greater_rmsd = max(atomic_types_rmsd)
     print("Total RMSD: {}    Worst RMSD: {}".format(str(rmsd)[:8], str(greater_rmsd)[:8]), end="\r")
-    if course is not None:
-        course.append(rmsd)
-    if course_parameters is not None:
-        course_parameters.extend(list_of_parameters)
-    sss = rmsd + mean(atomic_types_rmsd)
-    if isnan(sss):
+    objective_value = rmsd + mean(atomic_types_rmsd)
+    if isnan(objective_value):
         return 1000
-    return sss
-
-    from numpy import polyfit
-
-    value = 0
-    for index, right_charges in enumerate(set_of_molecules.ref_atomic_types_charges):
-        m, b = polyfit(results[set_of_molecules.all_symbolic_numbers_atoms == index], right_charges, 1)
-        if m > 1:
-            value += abs(1-1/m) + abs(b)
-        else:
-            value += abs(1-m) + abs(b)
+    return objective_value
 
 
-    return value/400 + sss
-    #
-    # from scipy.stats import pearsonr
-    # aaaaa = -sum([pearsonr(results[set_of_molecules.all_symbolic_numbers_atoms == index], right_charges)[0]**2 for index, right_charges in enumerate(set_of_molecules.ref_atomic_types_charges)])
-    # print(aaaaa)
-    # return sum(abs(results-set_of_molecules.ref_charges))
+from numpy import zeros
 
 @jit(nopython=True, cache=True)
 def lhsclassic(n, samples, high_bound, low_bound):
-    cut = linspace(0, 1, samples + 1)
-    u = random.rand(samples, n)
+    cut = linspace(0, 1, samples + 1).astype(float32)
+    u = zeros((samples, n), dtype=float32)
+    for x in range(samples):
+        u[x] += random.rand(n)
     for j in range(n):
         u[random.permutation(arange(samples)), j] = u[:, j] * cut[1] + cut[:samples]
-    return u * (high_bound - low_bound) + low_bound
+    for x in range(samples):
+        u[x] = u[x]* (high_bound - low_bound) + low_bound
+    return u
 
 
 class Parameterization:
-    def __init__(self, sdf, ref_charges, method, optimization_method, minimization_method, num_of_samples, cpu, parameters, data_dir, num_of_molecules_original, rewriting_with_force, subset_heuristic, atomic_types_pattern, git_hash=None):
+    def __init__(self, sdf, ref_charges, parameters, method, optimization_method, minimization_method, atomic_types_pattern, num_of_molecules, num_of_samples, subset_heuristic, validation, cpu, data_dir, rewriting_with_force, git_hash=None):
         start_time = date.now()
         files = [(sdf, True, "file"),
                  (ref_charges, True, "file"),
@@ -179,24 +161,27 @@ class Parameterization:
             files.extend([(parameters, True, "file")])
         control_existing_files(files,
                                rewriting_with_force)
-        if num_of_molecules_original is None:
-            num_of_molecules_original = open(sdf, "r").read().count("$$$$")
-        if num_of_molecules_original < 2:
+        if num_of_molecules is None:
+            num_of_molecules = open(sdf, "r").read().count("$$$$")
+        if num_of_molecules < 2:
             pass
             exit(colored("ERROR! There must be more then 1 molecules for parameterization!\n", "red"))
-        num_of_molecules_validation = int(0.9 * num_of_molecules_original)
-        # num_of_molecules_validation = 4
-        # num_of_molecules_original = 4
-        set_of_molecules = SetOfMolecules(sdf, num_of_molecules_validation)
-        num_of_atoms_validation = set_of_molecules.num_of_atoms
+        num_of_molecules_validation = int((1-validation/100) * num_of_molecules)
+        set_of_molecules = SetOfMolecules(sdf, num_of_molecules_to=num_of_molecules_validation)
         method = getattr(import_module("modules.methods"), method)()
         method.load_parameters(parameters, set_of_molecules, "parameterization", atomic_types_pattern=atomic_types_pattern)
         set_of_molecules.create_method_data(method)
         set_of_molecules.add_ref_charges(ref_charges, len(method.atomic_types))
+        set_of_molecules_validation = SetOfMolecules(sdf, num_of_molecules_from=num_of_molecules_validation, num_of_molecules_to=num_of_molecules)
+        try:
+            set_of_molecules_validation.create_method_data(method)
+        except ValueError:
+            exit(colored("ERROR! There is some atomic types in last {}% of set of molecules, which are not in first {}%!\n".format(validation, 100-validation), "red"))
+        set_of_molecules_validation.add_ref_charges(ref_charges, len(method.atomic_types))
 
         print("Parameterizating...")
         if optimization_method == "local_minimization":
-            _, final_parameters, course, course_parameters = local_minimization(method.parameters_values, minimization_method, method, set_of_molecules)
+            _, final_parameters = local_minimization(method.parameters_values, minimization_method, method, set_of_molecules)
         elif optimization_method == "guided_minimization":
             """
             #num_of_samples_heuristic
@@ -320,10 +305,11 @@ class Parameterization:
 
             
             """
+
             # # how many best candidates?
             # num_of_samples_modif, chunksize = modify_num_of_samples(num_of_samples, cpu)
             # samples = lhsclassic(len(method.parameters_values), num_of_samples_modif, *method.bounds[0])
-            # partial_f = partial(calculate_charges_and_statistical_data, method=method, set_of_molecules=set_of_molecules if subset_heuristic == 0 else SubsetOfMolecules(set_of_molecules, method, subset_heuristic))
+            # partial_f = partial(calculate_charges_and_statistical_data, method=method, set_of_molecules=SubsetOfMolecules(set_of_molecules, method, 5))
             # with Pool(cpu) as pool:
             #     candidates_rmsd = list(pool.imap(partial_f, samples, chunksize=chunksize))
             # main_candidates = samples[list(map(candidates_rmsd.index, heapq.nsmallest(100, candidates_rmsd)))]
@@ -331,13 +317,11 @@ class Parameterization:
             # with Pool(cpu) as pool:
             #     best_candidates = [result[0] for result in pool.map(partial_f, [parameters for parameters in main_candidates])]
             # mkdir(data_dir)
-            # with open(path.join(data_dir, "candidates1_{}_{}.txt".format(str(method), path.basename(sdf).split(".")[0])), "w") as file:
+            # with open(path.join(data_dir, "candidates_final_{}_{}.txt".format(str(method), path.basename(sdf).split(".")[0])), "w") as file:
             #     file.write(str(best_candidates))
+            #     file.write("\n"+str((date.now() - start_time)*cpu)[:-7])
             # from sys import exit
             # exit()
-
-
-
 
 
             num_of_samples_modif, chunksize = modify_num_of_samples(num_of_samples, cpu)
@@ -345,27 +329,44 @@ class Parameterization:
             partial_f = partial(calculate_charges_and_statistical_data, method=method, set_of_molecules=set_of_molecules if subset_heuristic == 0 else SubsetOfMolecules(set_of_molecules, method, subset_heuristic))
             with Pool(cpu) as pool:
                 candidates_rmsd = list(pool.imap(partial_f, samples, chunksize=chunksize))
+            # přepsat number of candidates!!!!!!!!!!!!!!
             main_candidates = samples[list(map(candidates_rmsd.index, heapq.nsmallest(1 if cpu < 1 else cpu, candidates_rmsd)))]
+
+            if subset_heuristic:
+                partial_f = partial(local_minimization, minimization_method=minimization_method, method=method, set_of_molecules=SubsetOfMolecules(set_of_molecules, method, subset_heuristic*3))
+                with Pool(cpu) as pool:
+                    main_candidates = [result[1] for result in pool.map(partial_f, [parameters for parameters in main_candidates])]
+
             partial_f = partial(local_minimization, minimization_method=minimization_method, method=method, set_of_molecules=set_of_molecules)
             with Pool(cpu) as pool:
                 best_candidates = [result for result in pool.map(partial_f, [parameters for parameters in main_candidates])]
             best_candidates.sort(key=itemgetter(0))
-            course = [parameterization_data[2] for parameterization_data in best_candidates]
-            course_parameters = best_candidates[0][3]
+            #mkdir(data_dir)
+            #with open(path.join(data_dir, "subset_minim2_{}_{}.txt".format(str(method), path.basename(sdf).split(".")[0])), "w") as file:
+            #    file.write(str([x[0] for x in best_candidates]))
+
+            #from sys import exit ; exit()
+
             final_parameters = best_candidates[0][1]
         method.new_parameters(final_parameters)
 
-        set_of_molecules = SetOfMolecules(sdf, num_of_molecules_original)
-        set_of_molecules.create_method_data(method)
-        set_of_molecules.add_ref_charges(ref_charges, len(method.atomic_types))
+
+        method.calculate(set_of_molecules_validation)
+        results_validation = method.results
+        atomic_types_charges_validation, chg_molecules_validation = prepare_data_for_comparison(method, set_of_molecules_validation)
 
 
         method.calculate(set_of_molecules)
+
+
+
+
         print(colored("\033[Kok\n", "green"))
 
         atomic_types_charges, chg_molecules = prepare_data_for_comparison(method, set_of_molecules)
+
         mkdir(data_dir)
-        comparison = Comparison(set_of_molecules, (method.results, atomic_types_charges, chg_molecules), data_dir, rewriting_with_force, parameterization=method, course=[optimization_method, course], course_parameters=(method.key_index, course_parameters), nums_of_atoms=num_of_atoms_validation)
+        comparison = Comparison(set_of_molecules, (method.results, atomic_types_charges, chg_molecules), data_dir, rewriting_with_force, parameterization=method, validation=[set_of_molecules_validation, (results_validation, atomic_types_charges_validation, chg_molecules_validation)])
         copyfile(sdf, path.join(data_dir, path.basename(sdf)))
         copyfile(ref_charges, path.join(data_dir, path.basename(ref_charges)))
         copyfile(parameters if parameters is not None else "modules/parameters/{}.json".format(str(method)), path.join(data_dir, "original_parameters.json"))

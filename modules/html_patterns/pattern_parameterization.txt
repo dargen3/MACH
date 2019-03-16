@@ -47,7 +47,6 @@ body {{font-family: Arial;}}
 .tabcontent {{
     display: none;
     padding: 6px 12px;
-    border: 1px solid #ccc;
     border-top: none;
 }}
 
@@ -84,6 +83,10 @@ th {{
 	font-weight: 400;
 }}
 th:hover{{background-color: #c6c6c6;}}
+
+
+td.tdhoverable{{ background-color:#DDD; width: 10%}}
+td.tdhoverable:hover{{background-color: #c6c6c6;}}
 
 
 th a,
@@ -140,25 +143,27 @@ a.sort-by:after {{
   <button class="tablinks" onclick="openTab(event, 'Parameterization informations')">Parameterization information</button>
   <button class="tablinks" onclick="openTab(event, 'Parameters')">Parameters</button>
   <button class="tablinks" onclick="openTab(event, 'Files')">Files</button>
-  <button class="tablinks" onclick="openTab(event, 'Course of parameterization')">Course of parameterization</button>
   <button class="tablinks" onclick="openTab(event, 'Contact & Licence')">Contact & Licence</button>
 </div>
 
 <div id="Correlation graph" class="tabcontent">
 </br>
-<h2>Atoms:</h2>
-<table border=1>
-<tr><th>RMSD</th><th>
+<h2>Atoms</h2>
+<table style="empty-cells:">
+<tr><th style="background-color:white; border: 0"></th><th>
+RMSD</th><th>
 Maximum deviation</th><th>
 Average deviation</th><th>
 Pearson<sup>2</sup></th><th>
 Number of atoms</th></tr>
-<tr><td>{}</td></tr>
+<tr><td class="tdhoverable">Parameterization</td><td>{}</td></tr>
+<tr><td class="tdhoverable">Validation</td><td>{}</td></tr>
 </table>
 </br>   
-<h2>Molecules:</h2>
-<table border=1>
-<tr><th>RMSD</th><th>
+<h2>Molecules</h2>
+<table style="empty-cells: hide">
+<tr><th style="background-color:white; border: 0"></th><th>
+RMSD</th><th>
 Maximum deviation</th><th>
 Average deviation</th><th>
 Pearson<sup>2</sup></th><th>
@@ -166,10 +171,11 @@ Number of molecules</th><th>
 Smallest molecule atoms</th><th>
 Largest molecule atoms</th><th>
 Average number of atoms</th></tr>
-<tr><td>{}</td></tr>
+<tr><td class="tdhoverable">Parameterization</td><td>{}</td></tr>
+<tr><td class="tdhoverable">Validation</td><td>{}</td></tr>
 </table>
 </br>   
-<h2>Atomic types:</h2>
+<h2>Atomic types - Parameterization</h2>
 
 <table id="atomic_types">
       <thead>
@@ -184,6 +190,23 @@ Average number of atoms</th></tr>
       <tbody>
 {}
 </table>
+
+
+<h2>Atomic types - Validation</h2>
+<table id="atomic_types_validation">
+      <thead>
+        <th onclick="sortTable(0, 'atomic_types_validation', 'str')"><a class="sort-by">Atomic type</th>
+        <th onclick="sortTable(1, 'atomic_types_validation', 'num')"><a class="sort-by">RMSD</th>
+        <th onclick="sortTable(2, 'atomic_types_validation', 'num')"><a class="sort-by">Maximum deviation</th>
+        <th onclick="sortTable(3, 'atomic_types_validation', 'num')"><a class="sort-by">Average deviation</th>
+        <th onclick="sortTable(4, 'atomic_types_validation', 'num')"><a class="sort-by">Pearson<sup>2</sup></th>
+        <th onclick="sortTable(5, 'atomic_types_validation', 'num')"><a class="sort-by">Number of atoms</th>
+        <th onclick="sortTable(6, 'atomic_types_validation', 'num')"><a class="sort-by">%</th>
+      </thead>
+      <tbody>
+{}
+</table>
+</br>
 <table border="1" style="margin-top: 0.5em">
 <tr>
 <td><strong>Legend:</strong> RMSD </td>
@@ -196,11 +219,12 @@ Average number of atoms</th></tr>
 <td style="background-color: darkred; color: white;">&gt;= 0.4</td>
 </tr>
 </table>
+</br>
 <div class="centered">{}</div>
 </div>
 
 <div id="Bonds" class="tabcontent">
-<h2>Bonds:</h2>
+<br>
 <table id="bonds">
       <thead>
         <th onclick="sortTable(0, 'bonds', 'str')"><a class="sort-by">Type</th>
@@ -210,12 +234,7 @@ Average number of atoms</th></tr>
       <tbody>
 {}
 </table>
-</div>
-
-
-<div id="Course of parameterization" class="tabcontent">
-<div class="centered">{}</div>
-<div class="centered">{}</div>
+<br>
 </div>
 
 <div id="Parameterization informations" class="tabcontent">
@@ -223,7 +242,7 @@ Average number of atoms</th></tr>
 </div>
 
 <div id="Parameters" class="tabcontent">
-<h2>Parameters:</h2>
+<br>
 <a href = "parameters.json">parameters.json</a>
 </br></br></br>
 <pre id="json"></pre></div>
@@ -234,15 +253,15 @@ document.getElementById("json").innerHTML = JSON.stringify({}, undefined, 2);
 
 
 <div id="Files" class="tabcontent">
-<h2>Original parameters file:</h2>
+<h2>Original parameters file</h2>
 <a href = "original_parameters.json">original_parameters.json</a>
-<h2>SDF file:</h2>
+<h2>SDF file</h2>
 <a href = "{}">{}</a>
-<h2>Empirical charges file:</h2>
+<h2>Empirical charges file</h2>
 <a href = "{}">{}</a>
-<h2>Reference charges file:</h2>
+<h2>Reference charges file</h2>
 <a href = "{}">{}</a>
-<h2>Molecules logs:</h2>
+<h2>Molecules logs</h2>
 <a href = "molecules.log">molecules.log</a>
 
 </div>
