@@ -123,9 +123,11 @@ class Comparison:
                                                     y_axis_label="Empirical Charges",
                                                     output_backend="webgl")
         correlation_graph_parameterization.title.align = "center"
-        correlation_graph_parameterization.title.text_font_size = "25px"
-        correlation_graph_parameterization.xaxis.axis_label_text_font_size = "20px"
-        correlation_graph_parameterization.yaxis.axis_label_text_font_size = "20px"
+        correlation_graph_parameterization.title.text_font_size = "17pt"
+        correlation_graph_parameterization.xaxis.axis_label_text_font_size = "25px"
+        correlation_graph_parameterization.yaxis.axis_label_text_font_size = "25px"
+        correlation_graph_parameterization.axis.major_label_text_font_size = '20px'
+
         correlation_graph_parameterization.line([-1000, 1000], [-1000, 1000])
         zipped_charges = list(zip(self.ref_set_of_molecules.atomic_types_charges.items(),
                                   self.set_of_molecules.atomic_types_charges.items()))
@@ -153,9 +155,11 @@ class Comparison:
                                                   y_axis_label="Empirical Charges",
                                                   output_backend="webgl")
             correlation_graph_validation.title.align = "center"
-            correlation_graph_validation.title.text_font_size = "25px"
-            correlation_graph_validation.xaxis.axis_label_text_font_size = "20px"
-            correlation_graph_validation.yaxis.axis_label_text_font_size = "20px"
+            correlation_graph_validation.title.text_font_size = "17pt"
+            correlation_graph_validation.xaxis.axis_label_text_font_size = "25px"
+            correlation_graph_validation.yaxis.axis_label_text_font_size = "25px"
+            correlation_graph_validation.axis.major_label_text_font_size = '20px'
+
             correlation_graph_validation.line([-1000, 1000], [-1000, 1000])
             zipped_charges = list(zip(self.ref_set_of_molecules_validation.atomic_types_charges.items(),
                                       self.set_of_molecules_validation.atomic_types_charges.items()))
@@ -177,9 +181,11 @@ class Comparison:
                                 y_axis_label="Empirical Charges",
                                 output_backend="webgl")
             comparison.title.align = "center"
-            comparison.title.text_font_size = "25px"
-            comparison.xaxis.axis_label_text_font_size = "20px"
-            comparison.yaxis.axis_label_text_font_size = "20px"
+            comparison.title.text_font_size = "17pt"
+            comparison.xaxis.axis_label_text_font_size = "25px"
+            comparison.yaxis.axis_label_text_font_size = "25px"
+            comparison.axis.major_label_text_font_size = '20px'
+
             comparison.line([-1000, 1000], [-1000, 1000])
             comparison.circle(self.ref_set_of_molecules.ref_charges, self.set_of_molecules.all_charges, size=6, legend="Parameterization", fill_color="black", line_color="black")
             comparison.circle(self.ref_set_of_molecules_validation.ref_charges, self.set_of_molecules_validation.all_charges, size=6, legend="Validation", fill_color="red", line_color="red")

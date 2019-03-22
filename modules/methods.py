@@ -406,7 +406,6 @@ class GM(Methods):
                                     set_of_molecules.all_num_of_atoms, set_of_molecules.all_num_of_bonds_mul_two,
                                     self.parameters_values)
 
-
 #################################################################################################
 @jit(nopython=True, cache=True)
 def mgc_calculate(all_num_of_atoms, all_mgc_matrix, all_symbols, parameters_values):
@@ -432,31 +431,7 @@ def mgc_calculate(all_num_of_atoms, all_mgc_matrix, all_symbols, parameters_valu
 
 class MGC(Methods):
     def calculate(self, set_of_molecules):
-        # self.results = mgc_calculate(set_of_molecules.all_num_of_atoms, set_of_molecules.all_MGC_matrix, set_of_molecules.multiplied_all_symbolic_numbers_atoms, self.parameters_values)
-        self.results = []
-        from time import time
-        start = time()
-        for molecule in set_of_molecules:
-            matrix = zeros((molecule.num_of_atoms, molecule.num_of_atoms), dtype=float64)
-            for x in range(molecule.num_of_atoms):
-                matrix[x][x] = 1
-            for atom1, atom2, bond_type in molecule.bonds_representation("index_index_type"):
-                matrix[atom1][atom1] += bond_type
-                matrix[atom2][atom2] += bond_type
-                matrix[atom1][atom2] -= bond_type
-                matrix[atom2][atom1] -= bond_type
-
-
-
-            vector = empty(molecule.num_of_atoms, dtype=float64)
-            for index, atom in enumerate(molecule.atoms):
-                vector[index] = self.parameters[atom.hbo + "_a"]
-            r = (solve(matrix, vector) - vector) / (prod(vector) ** (1 / molecule.num_of_atoms))
-            for x in r:
-                self.results.append(x)
-        print(time()- start)
-        from sys import exit
-        exit()
+        self.results = mgc_calculate(set_of_molecules.all_num_of_atoms, set_of_molecules.all_MGC_matrix, set_of_molecules.multiplied_all_symbolic_numbers_atoms, self.parameters_values)
 
 
 
@@ -481,19 +456,16 @@ def acks2_calculate(all_bonds, distances, all_symbols_atoms, all_symbols_bonds, 
         list_of_eta = empty(num_of_atoms, dtype=float64)
         for i in range(num_of_atoms):
             symbol = symbols_atoms[i]
-            ddd = parameters_values[symbol + 1]
-            matrix[i][i] = ddd
-            list_of_eta[i] = ddd
+            eta = parameters_values[symbol + 1]
+            matrix[i][i] = eta
+            list_of_eta[i] = eta
             vector[i] = -parameters_values[symbol]
             list_of_q0[i] = parameters_values[symbol + 3]
             for j in range(i+1, num_of_atoms):
                 d = distances[counter_distance]
                 counter_distance += 1
                 d0 = sqrt(2*parameters_values[symbol + 2]**2 + 2*parameters_values[symbols_atoms[j] + 2]**2)
-                if d0 == 0:
-                    matrix[i,j] = matrix[j,i] = 1.0/d
-                else:
-                    matrix[i,j] = matrix[j,i] = erf(d/d0)/d
+                matrix[i,j] = matrix[j,i] = erf(d/d0)/d
         vector[:num_of_atoms] += list_of_eta * list_of_q0
         matrix[num_of_atoms, :num_of_atoms] = 1
         matrix[:num_of_atoms, num_of_atoms] = 1
@@ -519,13 +491,7 @@ def acks2_calculate(all_bonds, distances, all_symbols_atoms, all_symbols_bonds, 
     return results
 
 
-
 class ACKS2(Methods):
     def calculate(self, set_of_molecules):
         self.results = acks2_calculate(set_of_molecules.all_bonds_without_bond_type, set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms, set_of_molecules.all_symbolic_numbers_bonds,
                                        set_of_molecules.all_num_of_atoms, set_of_molecules.all_num_of_bonds_mul_two, self.parameters_values, len(self.bond_types))
-
-
-
-
-

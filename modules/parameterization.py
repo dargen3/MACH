@@ -73,7 +73,7 @@ def write_parameters_to_file(parameters_file, method, set_of_molecules_file, opt
                      "Optimization method: {}".format(optimization_method),
                      "Minimization method: {}".format(minimization_method),
                      "Date of parameterization: {}".format(start_time.strftime("%Y-%m-%d %H:%M")),
-                     "CPU time: {}\n\n".format(str((date.now() - start_time)*cpu)[:-7]),
+                     "Time: {}\n\n".format(str(date.now() - start_time)[:-7]),
                      "Number of cpu: {}".format(cpu),
                      "Command: {}".format(" ".join(argv)),
                      "Github commit hash: <a href = \"{}\">{}</a></div>".format("https://github.com/dargen3/MACH/commit/{}".format(git_hash), git_hash)]
@@ -206,9 +206,14 @@ class Parameterization:
                 file.write(str(data))
             from sys import exit ; exit()
             """
-
             """
             # subset heuristic
+            set_of_molecules = SetOfMolecules(sdf)
+            method.load_parameters(parameters, set_of_molecules, "parameterization", atomic_types_pattern=atomic_types_pattern)
+            set_of_molecules.create_method_data(method)
+            set_of_molecules.add_ref_charges(ref_charges, len(method.atomic_types))
+
+
             data = []
             num_of_samples_modif, chunksize = modify_num_of_samples(num_of_samples, cpu)
             samples = lhsclassic(len(method.parameters_values), num_of_samples_modif, *method.bounds[0])
@@ -219,7 +224,15 @@ class Parameterization:
                 partial_f = partial(calculate_charges_and_statistical_data, method=method, set_of_molecules=subset_of_molecules)
                 with Pool(cpu) as pool:
                     candidates_rmsd = list(pool.imap(partial_f, samples, chunksize=chunksize))
-                main_candidates = samples[list(map(candidates_rmsd.index, heapq.nsmallest(3 if cpu < 3 else cpu, candidates_rmsd)))]
+                main_candidates = samples[list(map(candidates_rmsd.index, heapq.nsmallest(4 if cpu < 3 else cpu, candidates_rmsd)))]
+
+
+
+                partial_f = partial(local_minimization, minimization_method=minimization_method, method=method, set_of_molecules=SubsetOfMolecules(set_of_molecules, method, subset_heuristic * 3))
+                with Pool(cpu) as pool:
+                    main_candidates = [result[1] for result in pool.map(partial_f, [parameters for parameters in main_candidates])]
+
+
                 partial_f = partial(local_minimization, minimization_method=minimization_method, method=method,
                                     set_of_molecules=set_of_molecules)
                 with Pool(cpu) as pool:
@@ -232,22 +245,20 @@ class Parameterization:
             partial_f = partial(calculate_charges_and_statistical_data, method=method, set_of_molecules=set_of_molecules)
             with Pool(cpu) as pool:
                 candidates_rmsd = list(pool.imap(partial_f, samples, chunksize=chunksize))
-            main_candidates = samples[list(map(candidates_rmsd.index, heapq.nsmallest(3 if cpu < 3 else cpu, candidates_rmsd)))]
+            main_candidates = samples[list(map(candidates_rmsd.index, heapq.nsmallest(4, candidates_rmsd)))]
             partial_f = partial(local_minimization, minimization_method=minimization_method, method=method, set_of_molecules=set_of_molecules)
             with Pool(cpu) as pool:
                 best_candidates = [result for result in pool.map(partial_f, [parameters for parameters in main_candidates])]
             best_candidates.sort(key=itemgetter(0))
-            data.append((len(set_of_molecules), time() - start, best_candidates[0][0]))
+            data.append((len(set_of_molecules.molecules), time() - start, best_candidates[0][0]))
             mkdir(data_dir)
-            with open(path.join(data_dir, "num_of_subset_mol_{}_{}.txt".format(str(method), path.basename(sdf).split(".")[0])), "w") as file:
+            with open(path.join(data_dir, "num_of_subset_mol_final_{}_{}.txt".format(str(method), path.basename(sdf).split(".")[0])), "w") as file:
                 file.write(str(data))
             from sys import exit ; exit()
 
-
-            """
             """
             # minimizations
-            
+            """
             data = []
             for x in range(3):
                 num_of_samples_modif, chunksize = modify_num_of_samples(num_of_samples, cpu)
@@ -330,9 +341,9 @@ class Parameterization:
             with Pool(cpu) as pool:
                 candidates_rmsd = list(pool.imap(partial_f, samples, chunksize=chunksize))
             # přepsat number of candidates!!!!!!!!!!!!!!
-            main_candidates = samples[list(map(candidates_rmsd.index, heapq.nsmallest(1 if cpu < 1 else cpu, candidates_rmsd)))]
+            main_candidates = samples[list(map(candidates_rmsd.index, heapq.nsmallest(1, candidates_rmsd)))]
 
-            if subset_heuristic:
+            if subset_heuristic and method in ["EEM", "SFKEEM", "ACKS2", "QEq"]:
                 partial_f = partial(local_minimization, minimization_method=minimization_method, method=method, set_of_molecules=SubsetOfMolecules(set_of_molecules, method, subset_heuristic*3))
                 with Pool(cpu) as pool:
                     main_candidates = [result[1] for result in pool.map(partial_f, [parameters for parameters in main_candidates])]
@@ -341,11 +352,6 @@ class Parameterization:
             with Pool(cpu) as pool:
                 best_candidates = [result for result in pool.map(partial_f, [parameters for parameters in main_candidates])]
             best_candidates.sort(key=itemgetter(0))
-            #mkdir(data_dir)
-            #with open(path.join(data_dir, "subset_minim2_{}_{}.txt".format(str(method), path.basename(sdf).split(".")[0])), "w") as file:
-            #    file.write(str([x[0] for x in best_candidates]))
-
-            #from sys import exit ; exit()
 
             final_parameters = best_candidates[0][1]
         method.new_parameters(final_parameters)
