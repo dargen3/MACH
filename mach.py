@@ -1,19 +1,17 @@
 #!/usr/bin/env python3
 from termcolor import colored
 from numpy import random
-import warnings
-warnings.filterwarnings("ignore")
 from modules.arguments import load_arguments
 from modules.set_of_molecules import SetOfMolecules
 from modules.calculation import Calculation
 from modules.comparison import Comparison
 from modules.parameterization import Parameterization
-from modules.calculation_meta import calculation_meta  # only for my usage
-from modules.parameterization_meta import parameterization_meta # only for my usage
-from modules.make_complete_html import make_complete_html
+from modules.calculation_meta import calculation_meta
+from modules.parameterization_meta import parameterization_meta
 from modules.clusterization import clusterize
 from numba import jit
-import nlopt
+import warnings
+warnings.filterwarnings("ignore")
 
 
 @jit(nopython=True, cache=True)
@@ -26,7 +24,6 @@ if __name__ == '__main__':
     if args.random_seed != 0:
         random.seed(args.random_seed)
         numba_seed(args.random_seed)
-        nlopt.srand(args.random_seed)
     print(colored("\nMACH is running with mode: {}\n".format(args.mode), "blue"))
     if args.mode == "set_of_molecules_info":
         set_of_molecules = SetOfMolecules(args.sdf, args.num_of_molecules)
@@ -63,7 +60,7 @@ if __name__ == '__main__':
                    args.data_dir,
                    args.rewriting_with_force)
 
-    elif args.mode == "calculation_meta":  # only for my usage
+    elif args.mode == "calculation_meta":
         calculation_meta(args.sdf,
                          args.method,
                          args.parameters,
@@ -72,7 +69,7 @@ if __name__ == '__main__':
                          args.RAM,
                          args.walltime)
 
-    elif args.mode == "parameterization_meta":  # only for my usage
+    elif args.mode == "parameterization_meta":
         parameterization_meta(args.sdf,
                               args.ref_charges,
                               args.parameters,
@@ -88,9 +85,5 @@ if __name__ == '__main__':
                               args.RAM,
                               args.walltime)
 
-    elif args.mode == "make_complete_html":
-        make_complete_html()
-
     elif args.mode == "clusterization":
         clusterize(args.charges, args.sdf)
-

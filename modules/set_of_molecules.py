@@ -6,10 +6,12 @@ from collections import Counter
 from tabulate import tabulate
 from numpy import array, float32, int64, concatenate, random
 
+
 def sort(a, b):
     if a > b:
         return b-1, a-1
     return a-1, b-1
+
 
 class ArciSet:
     def __init__(self, file):
@@ -103,7 +105,7 @@ Number of atoms types: {}\n
 Number of bonds:       {}
 Number of bonds types: {}\n
 {}\n""".format(self.file, len(self.molecules), self.num_of_atoms, len(counter_atoms),
-           tabulate(table_atoms, headers=["Type", "Number", "%"]), num_of_bonds, len(counter_bonds), tabulate(table_bonds, headers=["Type", "Number", "%"]))
+               tabulate(table_atoms, headers=["Type", "Number", "%"]), num_of_bonds, len(counter_bonds), tabulate(table_bonds, headers=["Type", "Number", "%"]))
         print(data)
 
     def add_ref_charges(self, file, num_of_atomic_types):
@@ -128,7 +130,6 @@ Number of bonds types: {}\n
             atomic_types_charges[symbolic_number].append(charge)
         self.ref_atomic_types_charges = array([array(chg, dtype=float32) for chg in atomic_types_charges])
         print(colored("ok\n", "green"))
-
 
     def create_method_data(self, method):
         self.all_num_of_atoms = array([molecule.num_of_atoms for molecule in self], dtype=int64)
@@ -194,6 +195,7 @@ class SubsetOfMolecules(SetOfMolecules):
             atomic_types_charges[symbolic_number].append(charge)
         self.ref_atomic_types_charges = array([array(chg, dtype=float32) for chg in atomic_types_charges])
         print("Subset of molecules contain {} molecules.".format(self.num_of_molecules))
+
 
 class SetOfMoleculesFromChargesFile(ArciSet):
     def __init__(self, file, ref=True):

@@ -10,7 +10,3 @@ class Atom:
             return self.atomic_symbol
         elif pattern == "hbo":
             return self.atomic_symbol_high_bond
-        # elif pattern == "atomic_symbol_high_bond_bonded_atoms":
-        #     return self.atomic_symbol_high_bond_bonded_atoms
-        # elif pattern == "atomic_symbol_bonded_atoms":
-        #     return self.atomic_symbol_bonded_atoms

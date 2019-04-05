@@ -33,4 +33,3 @@ def control_existing_files(objects_data, rewriting_with_force):
     if exit_status:
         exit("")
     print(colored("ok\n", "green"))
-

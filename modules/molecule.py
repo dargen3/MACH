@@ -6,6 +6,7 @@ from .atom import Atom
 from .bond import Bond
 from numba import jit
 
+
 class MoleculeChg:
     def __init__(self, charges, name, atomic_types=None):
         self.name = name
@@ -26,19 +27,6 @@ def create_atom_high_bond(num_of_atoms, bonds, atomic_symbols):
             highest_bonds[atom2] = bond_type
     return ["{}~{}".format(a, b) for a, b in zip(atomic_symbols, highest_bonds)]
 
-# def create_atom_bonded_atoms(atoms, bonds_indexes, gap_symbol):
-#     data = []
-#     for index, atom in enumerate(atoms):
-#         bonded_atoms = []
-#         for (i1, i2), _ in bonds_indexes:
-#             if index in (i1, i2):
-#                 if index == i1:
-#                     bonded_atoms.append(atoms[i2])
-#                 else:
-#                     bonded_atoms.append(atoms[i1])
-#         data.append("{}{}{}".format(atom, gap_symbol, "".join(sorted(bonded_atoms))))
-#     return data
-
 
 class Molecule:
     def __init__(self, name, num_of_atoms, atomic_symbols, atomic_coordinates, bonds):
@@ -46,14 +34,11 @@ class Molecule:
         self.num_of_atoms = num_of_atoms
         self.atoms = []
         atoms_high_bonds = create_atom_high_bond(self.num_of_atoms, bonds, atomic_symbols)
-        # atoms_high_bonds_bonded_atoms = create_atom_bonded_atoms(atoms_high_bonds, bonds, ".")
-        # atoms_bonded_atoms = create_atom_bonded_atoms(atomic_symbols, bonds, "#")
         for index, (cor, atomic_symbol, symbol_high_bond) in enumerate(zip(atomic_coordinates, atomic_symbols, atoms_high_bonds)):
             self.atoms.append(Atom(cor, atomic_symbol, symbol_high_bond, index))
         self.bonds = []
         for (a1, a2), type in bonds:
             self.bonds.append(Bond(self.atoms[a1], self.atoms[a2], type))
-
 
     @property
     def atomic_coordinates(self):
@@ -83,7 +68,7 @@ class Molecule:
     def num_of_bonds(self):
         return [len(self.bonds)]
 
-    def MGC_matrix(self):  # možná smazat
+    def MGC_matrix(self):
         matrix = zeros((self.num_of_atoms, self.num_of_atoms), dtype=float64)
         for x in range(self.num_of_atoms):
             matrix[x][x] = 1
@@ -96,5 +81,3 @@ class Molecule:
 
     def __len__(self):
         return self.num_of_atoms
-
-

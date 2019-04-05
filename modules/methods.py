@@ -14,17 +14,7 @@ def convert_atom(atom):
             return "{}~{}".format(atom[0], atom[2])
         elif atom[1] == "plain":
             return atom[0]
-        #elif atom[1] == "aba":
-        #    return "{}~{}.{}".format(atom[0], atom[2], atom[3])
-        #elif atom[1] == "abaa":
-        #    return "{}#{}".format(atom[0], atom[2])
     elif isinstance(atom, str):
-        #if "." in atom:
-        #    sp = atom.split(".")
-        #    return [atom.split("~")[0], "aba", sp[0].split("~")[1], sp[1]]
-        #elif "_" in atom:
-        #    sp = atom.split("_")
-        #    return [sp[0], "abaa", sp[1]]
         s_atom = atom.split("~")
         if len(s_atom) == 2:
             return [s_atom[0], "hbo", s_atom[1]]
@@ -47,16 +37,14 @@ def convert_bond(bond):
             return [s_bond[0], s_bond[1], "plain", "*"]
 
 
-
 class Methods:
     def __init__(self):
         self.necessarily_data = {"EEM": ["distances"],
                                  "EEMfixed": ["distances"],
                                  "QEq": ["distances"],
                                  "SFKEEM": ["distances"],
-                                 "GM": ["bonds_without_bond_type", "num_of_bonds_mul_two"],
+                                 "PEOE": ["bonds_without_bond_type", "num_of_bonds_mul_two"],
                                  "MGC": ["MGC_matrix"],
-                                 "SQE": ["distances", "num_of_bonds_mul_two", "bonds_without_bond_type"],
                                  "ACKS2": ["distances", "num_of_bonds_mul_two", "bonds_without_bond_type"],
                                  }[str(self)]
 
@@ -67,7 +55,10 @@ class Methods:
         if not parameters_file:
             parameters_file = "modules/parameters/{}.json".format(str(self))
         print("Loading of parameters from {}...".format(parameters_file))
-        self.parameters_json = load(open(parameters_file))
+        try:
+            self.parameters_json = load(open(parameters_file))
+        except FileNotFoundError:
+            exit(colored("ERROR! There is no file {} in modules/parameters.".format(parameters_file)))
         self.atomic_types_pattern = atomic_types_pattern
         method_in_parameters_file = self.parameters_json["metadata"]["method"]
         if self.__class__.__name__ != method_in_parameters_file:
@@ -120,15 +111,14 @@ class Methods:
                     converted_bond = convert_bond(bond)
                     if converted_bond not in json_parameters_bonds:
                         self.parameters_json["bond"]["data"].append({"key": converted_bond, "value": [random.random()]})
-                        print(colored("Bond {} was added to parameters.".format(bond) ,"yellow"))
+                        print(colored("Bond {} was added to parameters.".format(bond), "yellow"))
                     else:
                         json_parameters_bonds.remove(converted_bond)
                 for bond in json_parameters_bonds:
                     for parameter in self.parameters_json["bond"]["data"]:
                         if parameter["key"] == bond:
                             self.parameters_json["bond"]["data"].remove(parameter)
-                    print(colored("Bond {} was deleted from parameters.".format(convert_bond(bond)[5:]) ,"yellow"))
-
+                    print(colored("Bond {} was deleted from parameters.".format(convert_bond(bond)[5:]), "yellow"))
         self.parameters = {}
         if "common" in self.parameters_json:
             for name, value in zip(self.parameters_json["common"]["names"], self.parameters_json["common"]["values"]):
@@ -187,11 +177,6 @@ class Methods:
                 bond["value"][0] = self.parameters[convert_bond(bond["key"])]
 
 
-#####################################################################
-
-from numpy.linalg import inv
-from numpy import dot
-
 @jit(nopython=True, cache=True)
 def eem_calculate(distances, symbols, all_num_of_atoms, parameters_values):
     results = empty(symbols.size, dtype=float64)
@@ -227,66 +212,6 @@ class EEM(Methods):
                                      set_of_molecules.all_num_of_atoms, self.parameters_values)
 
 
-##########################################################################################
-
-class EEMfixed(Methods):
-    def calculate(self, set_of_molecules):
-        try:
-            fixed_atoms_symbols = [self.atomic_types.index(x) for x in self.parameters_json["fixed"].keys()]
-        except:
-            fixed_atoms_symbols = []
-        distances, symbols, all_num_of_atoms, parameters_values = set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms,                            set_of_molecules.all_num_of_atoms, self.parameters_values
-        results = empty(symbols.size, dtype=float64)
-        kappa = parameters_values[-1]
-        index = 0
-        counter_distance = 0
-        counter_symbols = 0
-        for num_of_atoms in all_num_of_atoms:
-            new_index = index + num_of_atoms
-            num_of_atoms_add_1 = num_of_atoms + 1
-            matrix = empty((num_of_atoms_add_1, num_of_atoms_add_1), dtype=float64)
-            vector = empty(num_of_atoms_add_1, dtype=float64)
-            fixed_atoms_index = []
-            for x in range(num_of_atoms):
-                matrix[num_of_atoms][x] = matrix[x][num_of_atoms] = 1.0
-                symbol = symbols[counter_symbols]
-                if symbol/2 in fixed_atoms_symbols:
-                    fixed_atoms_index.append([x, symbol])
-                counter_symbols += 1
-                matrix[x][x] = parameters_values[symbol + 1]
-                vector[x] = -parameters_values[symbol]
-                for y in range(x + 1, num_of_atoms):
-                    matrix[x][y] = matrix[y][x] = kappa / distances[counter_distance]
-                    counter_distance += 1
-            matrix[num_of_atoms, num_of_atoms] = 0.0
-            for fixed_atom in fixed_atoms_index[::]:
-                vector -= matrix[:,fixed_atom[0]]
-            vector = delete(vector, [fixed_atom[0] for fixed_atom in fixed_atoms_index], axis=0)
-            matrix = delete(matrix, [fixed_atom[0] for fixed_atom in fixed_atoms_index], axis=0)
-            matrix = delete(matrix, [fixed_atom[0] for fixed_atom in fixed_atoms_index], axis=1)
-            vector[-1] = 0
-            for fixed_atom in fixed_atoms_index:
-                vector[-1] -= self.parameters_json["fixed"][self.atomic_types[int(fixed_atom[1]/2)]]
-            res = solve(matrix, vector)[:-1]
-            for fixed_atom in fixed_atoms_index:
-                res = insert(res, fixed_atom[0], self.parameters_json["fixed"][self.atomic_types[int(fixed_atom[1]/2)]])
-            results[index: new_index] = res
-            index = new_index
-        self.results = results
-
-
-
-
-
-
-
-
-
-
-
-
-
-#######################################################################################
 @jit(nopython=True, cache=True)
 def sfkeem_calculate(distances, symbols, all_num_of_atoms, parameters_values):
     results = empty(symbols.size, dtype=float64)
@@ -311,7 +236,7 @@ def sfkeem_calculate(distances, symbols, all_num_of_atoms, parameters_values):
         for x in range(num_of_atoms):
             matrix[x][x] = 2.0 * sqrt(matrix[x][x])
             for y in range(x+1, num_of_atoms):
-                matrix[x][y] = matrix[y][x] = 2.0 * sqrt(matrix[x][y]) / cosh(distances[counter_distance] * sigma) # poresit, nejde to rychleji? ale asi nejde...
+                matrix[x][y] = matrix[y][x] = 2.0 * sqrt(matrix[x][y]) / cosh(distances[counter_distance] * sigma)
                 counter_distance += 1
         vector[-1] = formal_charge
         matrix[num_of_atoms, num_of_atoms] = 0.0
@@ -323,9 +248,9 @@ def sfkeem_calculate(distances, symbols, all_num_of_atoms, parameters_values):
 class SFKEEM(Methods):
     def calculate(self, set_of_molecules):
         self.results = sfkeem_calculate(set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms,
-                                     set_of_molecules.all_num_of_atoms, self.parameters_values)
+                                        set_of_molecules.all_num_of_atoms, self.parameters_values)
 
-##########################################################################################
+
 @jit(nopython=True, cache=True)
 def qeq_calculate(distances, all_symbols, all_num_of_atoms, parameters_values):
     results = empty(all_symbols.size, dtype=float64)
@@ -348,7 +273,7 @@ def qeq_calculate(distances, all_symbols, all_num_of_atoms, parameters_values):
             symbol = symbols[i]
             matrix[i][i] = parameters_values[symbol + 1]
             vector[i] = -parameters_values[symbol]
-            rad1 = vector_rad[i] # změna!
+            rad1 = vector_rad[i]
             for j in range(i + 1, num_of_atoms):
                 rad2 = vector_rad[j]
                 distance = distances[counter_distance]
@@ -366,11 +291,9 @@ class QEq(Methods):
                                      set_of_molecules.all_num_of_atoms, self.parameters_values)
 
 
-##########################################################################################
 @jit(nopython=True, cache=True)
-def gm_calculate(all_bonds, all_symbols, all_num_of_atoms, all_num_of_bonds, parameters_values):
+def peoe_calculate(all_bonds, all_symbols, all_num_of_atoms, all_num_of_bonds, parameters_values):
     results = empty(all_symbols.size, dtype=float64)
-    formal_charge = 0 #???? neni tam
     index_a = 0
     index_b = 0
     for num_of_atoms, num_of_bonds in zip(all_num_of_atoms, all_num_of_bonds):
@@ -400,17 +323,16 @@ def gm_calculate(all_bonds, all_symbols, all_num_of_atoms, all_num_of_bonds, par
     return results
 
 
-class GM(Methods):
+class PEOE(Methods):
     def calculate(self, set_of_molecules):
-        self.results = gm_calculate(set_of_molecules.all_bonds_without_bond_type, set_of_molecules.multiplied_all_symbolic_numbers_atoms,
+        self.results = peoe_calculate(set_of_molecules.all_bonds_without_bond_type, set_of_molecules.multiplied_all_symbolic_numbers_atoms,
                                     set_of_molecules.all_num_of_atoms, set_of_molecules.all_num_of_bonds_mul_two,
                                     self.parameters_values)
 
-#################################################################################################
+
 @jit(nopython=True, cache=True)
 def mgc_calculate(all_num_of_atoms, all_mgc_matrix, all_symbols, parameters_values):
     results = empty(all_symbols.size, dtype=float64)
-    # no formal charge
     index = 0
     counter_symbols = 0
     counter = 0
@@ -434,9 +356,6 @@ class MGC(Methods):
         self.results = mgc_calculate(set_of_molecules.all_num_of_atoms, set_of_molecules.all_MGC_matrix, set_of_molecules.multiplied_all_symbolic_numbers_atoms, self.parameters_values)
 
 
-
-
-##############################################################################################
 @jit(nopython=True, cache=True)
 def acks2_calculate(all_bonds, distances, all_symbols_atoms, all_symbols_bonds, all_num_of_atoms, all_num_of_bonds, parameters_values, num_of_bond_types):
     results = empty(all_symbols_atoms.size, dtype=float64)
@@ -465,7 +384,7 @@ def acks2_calculate(all_bonds, distances, all_symbols_atoms, all_symbols_bonds, 
                 d = distances[counter_distance]
                 counter_distance += 1
                 d0 = sqrt(2*parameters_values[symbol + 2]**2 + 2*parameters_values[symbols_atoms[j] + 2]**2)
-                matrix[i,j] = matrix[j,i] = erf(d/d0)/d
+                matrix[i, j] = matrix[j, i] = erf(d/d0)/d
         vector[:num_of_atoms] += list_of_eta * list_of_q0
         matrix[num_of_atoms, :num_of_atoms] = 1
         matrix[:num_of_atoms, num_of_atoms] = 1
