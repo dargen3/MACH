@@ -35,14 +35,14 @@ class SetOfMolecules(ArciSet):
         with open(file, "r") as sdf:
             molecules_data = sdf.read()
         if molecules_data[-5:].strip() != "$$$$":
-            exit(colored("{} is not valid sdf file. Last line is not $$$$.\n".format(sdf.name), "red"))
+            exit(colored("{} is not valid sdf file. Last line does not contain $$$$.\n".format(sdf.name), "red"))
         molecules_data = [x.splitlines() for x in molecules_data.split("$$$$\n")]
         num_of_all_molecules = len(molecules_data) - 1
         if not num_of_molecules_to:
             self.num_of_molecules_to = num_of_all_molecules
         else:
             if num_of_molecules_to > num_of_all_molecules:
-                exit(colored(("ERROR! Number of molecules is only {}!".format(num_of_all_molecules)), "red"))
+                exit(colored(("ERROR! There are only {}!".format(num_of_all_molecules)), "red"))
             self.num_of_molecules_to = num_of_molecules_to
         if not num_of_molecules_from:
             self.num_of_molecules_from = 0

@@ -1,74 +1,23 @@
-
-latech
-overleaf fi thesis
-
-minimalization second kouknout na grafy
+0.6579416275024415
+4.948231401443481
 
 
-zaokroulhit kandidates na 3 desetinná místa a provest spearmanna - provedeno - nic moc
-
-
- 
-projet clusterization, clustering, součet??
-problem atomových typů - matice? jiná metoda? Hranice 
-EEMfixed
-
-redukce dimenzí - PCA
-
-
-osnova
-
-redukce dimenzí
+0.3278859853744507
 
 
 
 
-gramarly
-
-první udělat osnovu
-
-
-1) subset heuristic - 3 nejlepší samply, 500000 samplů
-             - zkontrolovat, zda jsou časy reálné???
-
-
-2) num of samples - hotovo, počítá se s objektivní funkcí! 100000 samplů? Dva pokusy
-
-
-
-              
-
-3) minimization method 2x
-
-
-
-4) kolik best kandidates
-
-
-
-
- 
-spearmann korelační rank 
-xy corelační graf před - po
-
-
-
-všechno vypisovat, nastavit defaulty
-
-
-validace !!!
-
-
-
-- napočítat vše pro všechny metody
-
-
-
-
-
-pro mě:
 v metodach není zahrnutý formal charge, defaultně je na nule
 čtení naboju z sdf není hotové ani pro v3 ani pro v2
 odkaz na sdf - dat na readme!
 jednotlive metody - odkazy - dat na readme
 
+
+
+
+budoucnost (
+Kopírování dat z metacentra – zjistit ip adresu a na tu poté nakopírovat data, je to možné nebo nechat tak?
+Dodat příkaz co je na metacentru a případně stáhni data
+
+implementovat promíchání před výběrem validace a parametrizace
+)

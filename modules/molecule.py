@@ -79,5 +79,15 @@ class Molecule:
             matrix[atom2][atom1] -= bond_type
         return array([value for index, line in enumerate(matrix) for value in line[index:]], dtype=float64)
 
+    def DENR_matrix(self):
+        matrix = zeros((self.num_of_atoms, self.num_of_atoms), dtype=float64)
+        for atom1, atom2, bond_type in self.bonds_representation("index_index_type"):
+            matrix[atom1][atom1] += bond_type
+            matrix[atom2][atom2] += bond_type
+            matrix[atom1][atom2] -= bond_type
+            matrix[atom2][atom1] -= bond_type
+        return array([value for index, line in enumerate(matrix) for value in line[index:]], dtype=float64)
+
+
     def __len__(self):
         return self.num_of_atoms

@@ -42,7 +42,7 @@ def modify_num_of_samples(num_of_samples, cpu):
     return num_of_samples_modif, chunksize
 
 
-def write_parameters_to_file(parameters_file, method, set_of_molecules_file, optimization_method, minimization_method, start_time, num_of_samples, cpu, git_hash, subset_heuristic):
+def write_parameters_to_file(parameters_file, method, set_of_molecules_file, optimization_method, minimization_method, start_time, num_of_samples, num_of_candidates, cpu, git_hash, subset_heuristic):
     print("Writing parameters to {}...".format(parameters_file))
     if not git_hash:
         git_hash = git.Repo(search_parent_directories=True).head.object.hexsha
@@ -56,7 +56,8 @@ def write_parameters_to_file(parameters_file, method, set_of_molecules_file, opt
                      "Command: {}".format(" ".join(argv)),
                      "Github commit hash: <a href = \"{}\">{}</a></div>".format("https://github.com/dargen3/MACH/commit/{}".format(git_hash), git_hash)]
     if optimization_method == "guided_minimization":
-        summary_lines.insert(3, "Samples: {}".format(num_of_samples))
+        summary_lines.insert(3, "Number of samples: {}".format(num_of_samples))
+        summary_lines.insert(3, "Number of candidates: {}".format(num_of_candidates))
         summary_lines.insert(3, "Subset heuristic: {}".format(subset_heuristic))
     parameters_json = dumps(method.parameters_json, indent=2, sort_keys=True)
     with open(parameters_file, "w") as par_file:
@@ -129,7 +130,7 @@ def lhsclassic(n, samples, high_bound, low_bound):
 
 
 class Parameterization:
-    def __init__(self, sdf, ref_charges, parameters, method, optimization_method, minimization_method, atomic_types_pattern, num_of_molecules, num_of_samples, subset_heuristic, validation, cpu, data_dir, rewriting_with_force, git_hash=None):
+    def __init__(self, sdf, ref_charges, parameters, method, optimization_method, minimization_method, atomic_types_pattern, num_of_molecules, num_of_samples, num_of_candidates, subset_heuristic, validation, cpu, data_dir, rewriting_with_force, git_hash=None):
         start_time = date.now()
         files = [(sdf, True, "file"),
                  (ref_charges, True, "file"),
@@ -142,7 +143,7 @@ class Parameterization:
             num_of_molecules = open(sdf, "r").read().count("$$$$")
         if num_of_molecules < 2:
             pass
-            exit(colored("ERROR! There must be more then 1 molecules for parameterization!\n", "red"))
+            exit(colored("ERROR! There must be more then 1 molecule for parameterization!\n", "red"))
         num_of_molecules_validation = int((1 - validation / 100) * num_of_molecules)
         set_of_molecules = SetOfMolecules(sdf, num_of_molecules_to=num_of_molecules_validation)
         method = getattr(import_module("modules.methods"), method)()
@@ -153,19 +154,9 @@ class Parameterization:
         try:
             set_of_molecules_validation.create_method_data(method)
         except ValueError:
-            exit(colored("ERROR! There is some atomic types in last {}% of set of molecules, which are not in first {}%!\n".format(validation, 100 - validation), "red"))
+            exit(colored("ERROR! There are atomic types in last {}% of set of molecules, that are not in first {}%!\n".format(validation, 100 - validation), "red"))
         set_of_molecules_validation.add_ref_charges(ref_charges, len(method.atomic_types))
         print("Parameterizating...")
-
-        from scipy.optimize import differential_evolution, basinhopping, shgo, dual_annealing
-        if optimization_method == "differential_evolution":
-            final_parameters = differential_evolution(calculate_charges_and_statistical_data, method.bounds, args=(method, set_of_molecules)).x
-        if optimization_method == "dual_annealing":
-            partial_f = partial(calculate_charges_and_statistical_data, method=method, set_of_molecules=set_of_molecules)
-            final_parameters = dual_annealing(partial_f, method.bounds).x
-
-
-
         if optimization_method == "local_minimization":
             _, final_parameters = local_minimization(method.parameters_values, minimization_method, method, set_of_molecules)
         elif optimization_method == "guided_minimization":
@@ -174,8 +165,7 @@ class Parameterization:
             partial_f = partial(calculate_charges_and_statistical_data, method=method, set_of_molecules=set_of_molecules if subset_heuristic == 0 else SubsetOfMolecules(set_of_molecules, method, subset_heuristic))
             with Pool(cpu) as pool:
                 candidates_rmsd = list(pool.imap(partial_f, samples, chunksize=chunksize))
-            # přepsat number of candidates!!!!!!!!!!!!!!
-            main_candidates = samples[list(map(candidates_rmsd.index, heapq.nsmallest(30, candidates_rmsd)))]
+            main_candidates = samples[list(map(candidates_rmsd.index, heapq.nsmallest(num_of_candidates, candidates_rmsd)))]
             if subset_heuristic and method in ["EEM", "SFKEEM", "ACKS2", "QEq"]:
                 partial_f = partial(local_minimization, minimization_method=minimization_method, method=method, set_of_molecules=SubsetOfMolecules(set_of_molecules, method, subset_heuristic * 3))
                 with Pool(cpu) as pool:
@@ -199,5 +189,5 @@ class Parameterization:
         copyfile(parameters if parameters is not None else "modules/parameters/{}.json".format(str(method)), path.join(data_dir, "original_parameters.json"))
         charges = path.join(data_dir, path.basename(ref_charges)).replace(".chg", "_{}.chg".format(str(method)))
         write_charges_to_file(charges, method.results, set_of_molecules)
-        summary_lines, parameters_json = write_parameters_to_file(path.join(data_dir, "parameters.json"), method, set_of_molecules.file, optimization_method, minimization_method, start_time, num_of_samples if optimization_method == "guided_minimization" else None, cpu, git_hash, subset_heuristic)
+        summary_lines, parameters_json = write_parameters_to_file(path.join(data_dir, "parameters.json"), method, set_of_molecules.file, optimization_method, minimization_method, start_time, num_of_samples if optimization_method == "guided_minimization" else None, num_of_candidates if optimization_method == "guided_minimization" else None, cpu, git_hash, subset_heuristic if subset_heuristic != 0 else "False")
         comparison.write_html_parameterization(path.join(data_dir, "{}_{}.html".format(path.basename(sdf)[:-4], method)), path.basename(sdf), path.basename(charges), path.basename(ref_charges), summary_lines, parameters_json)

@@ -1,8 +1,8 @@
 from sys import exit
 from termcolor import colored
 from numba import jit
-from numpy import float64, empty, array, ones, zeros, sqrt, cosh, concatenate, int64, sum, prod, dot, delete, insert, random
-from numpy.linalg import solve, eigvalsh
+from numpy import float64, empty, array, ones, zeros, sqrt, cosh, concatenate, int64, sum, prod, dot, delete, insert, random, identity
+from numpy.linalg import solve, eigvalsh, inv
 from math import erf
 from json import load
 from collections import Counter
@@ -40,11 +40,12 @@ def convert_bond(bond):
 class Methods:
     def __init__(self):
         self.necessarily_data = {"EEM": ["distances"],
-                                 "EEMfixed": ["distances"],
                                  "QEq": ["distances"],
+                                 "COMBA": ["distances"],
                                  "SFKEEM": ["distances"],
                                  "PEOE": ["bonds_without_bond_type", "num_of_bonds_mul_two"],
                                  "MGC": ["MGC_matrix"],
+                                 "DENR": ["DENR_matrix"],
                                  "ACKS2": ["distances", "num_of_bonds_mul_two", "bonds_without_bond_type"],
                                  }[str(self)]
 
@@ -292,6 +293,47 @@ class QEq(Methods):
 
 
 @jit(nopython=True, cache=True)
+def comba_calculate(distances, all_symbols, all_num_of_atoms, parameters_values):
+    results = empty(all_symbols.size, dtype=float64)
+    formal_charge = 0
+    index = 0
+    counter_distance = 0
+    for num_of_atoms in all_num_of_atoms:
+        new_index = index + num_of_atoms
+        symbols = all_symbols[index: new_index]
+        num_of_atoms_add_1 = num_of_atoms + 1
+        matrix = empty((num_of_atoms_add_1, num_of_atoms_add_1), dtype=float64)
+        vector = empty(num_of_atoms_add_1, dtype=float64)
+        matrix[num_of_atoms, num_of_atoms] = 0.0
+        vector_rad = empty(num_of_atoms, dtype=float64)
+        for x in range(num_of_atoms):
+            vector_rad[x] = parameters_values[symbols[x] + 2]
+            matrix[x][num_of_atoms] = 1.0
+            matrix[num_of_atoms][x] = 1.0
+        for i in range(num_of_atoms):
+            symbol = symbols[i]
+            matrix[i][i] = parameters_values[symbol + 1]
+            vector[i] = -parameters_values[symbol]
+            rad1 = vector_rad[i]
+            for j in range(i + 1, num_of_atoms):
+                rad2 = vector_rad[j]
+                distance = distances[counter_distance]
+                matrix[i][j] = matrix[j][i] = 0.5/sqrt(distance**2 + (1/(2*sqrt(rad1*rad2)))**2)
+                counter_distance += 1
+        vector[-1] = formal_charge
+        results[index: new_index] = solve(matrix, vector)[:-1]
+        index = new_index
+    return results
+
+
+class COMBA(Methods):
+    def calculate(self, set_of_molecules):
+        self.results = comba_calculate(set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms,
+                                           set_of_molecules.all_num_of_atoms, self.parameters_values)
+
+
+
+@jit(nopython=True, cache=True)
 def peoe_calculate(all_bonds, all_symbols, all_num_of_atoms, all_num_of_bonds, parameters_values):
     results = empty(all_symbols.size, dtype=float64)
     index_a = 0
@@ -414,3 +456,39 @@ class ACKS2(Methods):
     def calculate(self, set_of_molecules):
         self.results = acks2_calculate(set_of_molecules.all_bonds_without_bond_type, set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms, set_of_molecules.all_symbolic_numbers_bonds,
                                        set_of_molecules.all_num_of_atoms, set_of_molecules.all_num_of_bonds_mul_two, self.parameters_values, len(self.bond_types))
+
+
+@jit(nopython=True, cache=True)
+def denr_calculate(all_num_of_atoms, all_denr_matrix, all_symbols, parameters_values):
+    results = empty(all_symbols.size, dtype=float64)
+    index = 0
+    counter_symbols = 0
+    counter = 0
+    for num_of_atoms in all_num_of_atoms:
+        new_index = index + num_of_atoms
+        charges = zeros(num_of_atoms)
+        I = identity(num_of_atoms)
+        n0 = zeros((num_of_atoms, num_of_atoms))
+        x0 = empty(num_of_atoms)
+        L = empty((num_of_atoms, num_of_atoms))
+        for x in range(num_of_atoms):
+            x0[x] = parameters_values[all_symbols[counter_symbols]]
+            n0[x][x] = parameters_values[all_symbols[counter_symbols]+1]
+            counter_symbols += 1
+            for y in range(x, num_of_atoms):
+                L[x][y] = L[y][x] = all_denr_matrix[counter]
+                counter += 1
+        B0 = dot(L, n0)
+        a0 = dot(L, x0)
+        AA = inv(I + parameters_values[-1] * B0)
+        BB = parameters_values[-1] * a0
+        for x in range(3):
+            charges = dot(AA, (charges - BB))
+        results[index: new_index] = charges
+        index = new_index
+    return results
+
+
+class DENR(Methods):
+    def calculate(self, set_of_molecules):
+        self.results = denr_calculate(set_of_molecules.all_num_of_atoms, set_of_molecules.all_DENR_matrix, set_of_molecules.multiplied_all_symbolic_numbers_atoms, self.parameters_values)

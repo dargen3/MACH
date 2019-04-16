@@ -8,7 +8,6 @@ from modules.comparison import Comparison
 from modules.parameterization import Parameterization
 from modules.calculation_meta import calculation_meta
 from modules.parameterization_meta import parameterization_meta
-from modules.clusterization import clusterize
 from numba import jit
 import warnings
 warnings.filterwarnings("ignore")
@@ -47,6 +46,7 @@ if __name__ == '__main__':
                          args.atomic_types_pattern,
                          args.num_of_molecules,
                          args.num_of_samples,
+                         args.num_of_candidates,
                          args.subset_heuristic,
                          args.validation,
                          args.cpu,
@@ -79,11 +79,9 @@ if __name__ == '__main__':
                               args.atomic_types_pattern,
                               args.num_of_molecules,
                               args.num_of_samples,
+                              args.num_of_candidates,
                               args.subset_heuristic,
                               args.validation,
                               args.cpu,
                               args.RAM,
                               args.walltime)
-
-    elif args.mode == "clusterization":
-        clusterize(args.charges, args.sdf)
