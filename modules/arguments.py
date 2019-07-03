@@ -1,7 +1,5 @@
 import argparse
 import argcomplete
-from termcolor import colored
-from os.path import basename
 
 
 def load_arguments():
@@ -9,7 +7,7 @@ def load_arguments():
     parser.add_argument("--mode", help="Choose the MACH mode.",
                         required=True,
                         choices=("set_of_molecules_info", "calculation", "parameterization", "comparison",
-                                 "calculation_meta", "parameterization_meta"))
+                                 "calculation_meta", "parameterization_meta", "clusterization"))
     parser.add_argument("--sdf", help="Sdf file with molecules.")
     parser.add_argument("--charges", help="File to store calculated charges or file with charges for comparison.")
     parser.add_argument("--ref_charges", help="File with reference charges.")
@@ -27,6 +25,7 @@ def load_arguments():
     parser.add_argument("--RAM", help="Use for parameterization_meta and calculation_meta modes only. Define maximum RAM usage for META job in GB.", default=10, type=int)
     parser.add_argument("--walltime", help="Use for parameterization_meta and calculation_meta modes only. Define maximum time for META job in hours.", default=10, type=int)
     parser.add_argument("--git_hash", help="For internal usage only.")
+    parser.add_argument("--create_submolecules", help="Create submolecules to speed up parameterization and calculation of charges. Use for large molecules such proteins.", action="store_true")
     parser.add_argument("--validation", help="Define how many percent of set of molecules will be used for validation.", default=10, type=int)
     parser.add_argument("--atomic_types_pattern",
                         help="Use for set_of_molecules_info and parameterization only. Argument defines used atomic classifier.",
@@ -61,5 +60,12 @@ def load_arguments():
     elif args.mode == "parameterization_meta":
         if args.ref_charges is None or args.method is None or args.sdf is None:
             parser.error("For parameterization_meta mode choose --ref_charges, --method and --sdf. ")
+
+    elif args.mode == "clusterization":
+        if args.charges is None or args.sdf is None:
+            parser.error("For clusterization mode choose --charges and --sdf.")
+
+    if args.mode in ["parameterization", "parameterization_meta"] and type(args.num_of_molecules) == int and args.num_of_molecules < 2:
+        parser.error("There must be more then 1 molecule for parameterization!")
 
     return args

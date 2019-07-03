@@ -3,12 +3,10 @@ from .control_existing import control_existing_files
 from .set_of_molecules import SetOfMolecules, SetOfMoleculesFromChargesFile
 from .control_order_of_molecules import control_order_of_molecules
 from termcolor import colored
-from numpy import sqrt, mean, max, min, sum, corrcoef, log10, array, histogram, asarray, arange
+from numpy import sqrt, mean, max, min, sum, corrcoef, array, histogram, asarray, arange
 from scipy.stats import pearsonr
-from tabulate import tabulate
 from sys import exit
 from os import path, mkdir
-from operator import itemgetter
 from collections import namedtuple, Counter
 from bokeh.plotting import figure, show, output_file
 from bokeh.palettes import Category20
@@ -70,28 +68,32 @@ class Comparison:
         self.all_atoms_data = [round(item, 4) for item in
                                calculate_statistics(self.ref_set_of_molecules.ref_charges,
                                                     self.set_of_molecules.all_charges)]
-        self.all_atoms_data_validation = [round(item, 4) for item in
-                                          calculate_statistics(self.ref_set_of_molecules_validation.ref_charges,
-                                                               self.set_of_molecules_validation.all_charges)]
         self.atomic_types_data = []
         for (atomic_type, ref_charges), (_, charges) in zip(self.ref_set_of_molecules.atomic_types_charges.items(),
                                                             self.set_of_molecules.atomic_types_charges.items()):
             atomic_type_data = [round(item, 4) for item in calculate_statistics(ref_charges, charges)]
             self.atomic_types_data.append([atomic_type] + atomic_type_data + [round(atomic_type_data[4] / (self.all_atoms_data[4] / 100), 2)])
+        if self.parameterization:
+            self.all_atoms_data_validation = [round(item, 4) for item in
+                                              calculate_statistics(self.ref_set_of_molecules_validation.ref_charges,
+                                                                   self.set_of_molecules_validation.all_charges)]
 
-        self.atomic_types_data_validation = []
-        for (atomic_type, ref_charges), (_, charges) in zip(self.ref_set_of_molecules_validation.atomic_types_charges.items(),
-                                                            self.set_of_molecules_validation.atomic_types_charges.items()):
-            if not len(charges):
-                continue
-            atomic_type_data = [round(item, 4) for item in calculate_statistics(ref_charges, charges)]
-            self.atomic_types_data_validation.append([atomic_type] + atomic_type_data + [round(atomic_type_data[4] / (self.all_atoms_data_validation[4] / 100), 2)])
+            self.atomic_types_data_validation = []
+            for (atomic_type, ref_charges), (_, charges) in zip(self.ref_set_of_molecules_validation.atomic_types_charges.items(),
+                                                                self.set_of_molecules_validation.atomic_types_charges.items()):
+                if not len(charges):
+                    continue
+                atomic_type_data = [round(item, 4) for item in calculate_statistics(ref_charges, charges)]
+                self.atomic_types_data_validation.append([atomic_type] + atomic_type_data + [round(atomic_type_data[4] / (self.all_atoms_data_validation[4] / 100), 2)])
         molecules_statistical_data = [calculate_statistics(ref_molecule.charges, molecule.charges) for ref_molecule, molecule in zip(self.ref_set_of_molecules, self.set_of_molecules.molecules)]
         molecules_num_of_atoms = [molecule[4] for molecule in molecules_statistical_data]
-        self.molecules_data = [round(item, 4) for item in [mean([x[y] for x in molecules_statistical_data]) for y in range(4)] + [self.ref_set_of_molecules.num_of_molecules_to - self.ref_set_of_molecules.num_of_molecules_from, min(molecules_num_of_atoms), max(molecules_num_of_atoms), mean(molecules_num_of_atoms)]]
-        molecules_statistical_data_validaton = [calculate_statistics(ref_molecule.charges, molecule.charges) for ref_molecule, molecule in zip(self.ref_set_of_molecules_validation, self.set_of_molecules_validation.molecules)]
-        molecules_num_of_atoms_validation = [molecule[4] for molecule in molecules_statistical_data_validaton]
-        self.molecules_data_validation = [round(item, 4) for item in [mean([x[y] for x in molecules_statistical_data_validaton]) for y in range(4)] + [self.ref_set_of_molecules_validation.num_of_molecules_to - self.ref_set_of_molecules_validation.num_of_molecules_from, min(molecules_num_of_atoms_validation), max(molecules_num_of_atoms_validation), mean(molecules_num_of_atoms_validation)]]
+        self.molecules_data = [round(item, 4) for item in [mean([x[y] for x in molecules_statistical_data]) for y in range(4)] + [self.ref_set_of_molecules.num_of_molecules, min(molecules_num_of_atoms), max(molecules_num_of_atoms), mean(molecules_num_of_atoms)]]
+
+        if self.parameterization:
+
+            molecules_statistical_data_validaton = [calculate_statistics(ref_molecule.charges, molecule.charges) for ref_molecule, molecule in zip(self.ref_set_of_molecules_validation, self.set_of_molecules_validation.molecules)]
+            molecules_num_of_atoms_validation = [molecule[4] for molecule in molecules_statistical_data_validaton]
+            self.molecules_data_validation = [round(item, 4) for item in [mean([x[y] for x in molecules_statistical_data_validaton]) for y in range(4)] + [self.ref_set_of_molecules_validation.num_of_molecules, min(molecules_num_of_atoms_validation), max(molecules_num_of_atoms_validation), mean(molecules_num_of_atoms_validation)]]
         with open(path.join(self.data_dir, "molecules.log"), "w") as molecule_logs_file:
             molecule_logs_file.write(
                 "name, num. of atoms, atomic types, rmsd, max. deviation, av. deviation, pearson**2\n")
@@ -112,7 +114,7 @@ class Comparison:
         print(colored("ok\n", "green"))
 
     def graphs(self):
-        print("Creating pictures...")
+        print("Creating graphs...")
         color_numbers = {"H~1": 0, "O~1": 2, "O~2": 4, "N~1": 6, "N~2": 8, "C~1": 10, "C~2": 12, "S~1": 14,
                          "Ca~1": 16, "S~2": 18, "P~1": 1, "P~2": 3, "N~3": 5, "C~3": 7, "Br~1": 9, "Cl~1": 11,
                          "F~1": 13, "I~1": 15, "H": 0, "C": 2, "N": 4, "O": 6, "S": 8, "I": 10, "F": 12, "Br": 14, "Cl": 16, "P": 18, "Ca": 1}
@@ -120,7 +122,7 @@ class Comparison:
                                                     plot_height=900,
                                                     title="Correlation graph",
                                                     x_axis_label="Reference charges",
-                                                    y_axis_label="Empirical Charges",
+                                                    y_axis_label="Empirical charges",
                                                     output_backend="webgl")
         correlation_graph_parameterization.title.align = "center"
         correlation_graph_parameterization.title.text_font_size = "17pt"
@@ -152,7 +154,7 @@ class Comparison:
                                                   plot_height=900,
                                                   title="Correlation graph - validation",
                                                   x_axis_label="Reference charges",
-                                                  y_axis_label="Empirical Charges",
+                                                  y_axis_label="Empirical charges",
                                                   output_backend="webgl")
             correlation_graph_validation.title.align = "center"
             correlation_graph_validation.title.text_font_size = "17pt"
@@ -178,7 +180,7 @@ class Comparison:
                                 plot_height=900,
                                 title="Correlation graph - validation",
                                 x_axis_label="Reference charges",
-                                y_axis_label="Empirical Charges",
+                                y_axis_label="Empirical charges",
                                 output_backend="webgl")
             comparison.title.align = "center"
             comparison.title.text_font_size = "17pt"

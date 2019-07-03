@@ -6,7 +6,7 @@ def control_order_of_molecules(names1, names2, file1, file2):
     print("Control of order of molecules... ")
     if names1 == names2:
         print(colored("ok\n", "green"))
-        return
+        return True
     names1 = set(names1)
     names2 = set(names2)
     if names1 == names2:

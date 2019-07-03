@@ -4,7 +4,9 @@ from sys import exit
 from termcolor import colored
 from collections import Counter
 from tabulate import tabulate
-from numpy import array, float32, int64, concatenate, random
+from numpy import array, float32, int32, concatenate, random, mean
+from copy import copy
+from inspect import stack
 
 
 def sort(a, b):
@@ -14,9 +16,6 @@ def sort(a, b):
 
 
 class ArciSet:
-    def __init__(self, file):
-        self.molecules = []
-        self.file = file
 
     def __len__(self):
         return self.num_of_molecules
@@ -27,37 +26,79 @@ class ArciSet:
     def __iter__(self):
         return iter(self.molecules)
 
+    def create_indices(self, nums_of_atoms):
+        if self.submolecules:
+            indices = []
+            index = 0
+            for num_of_atom in nums_of_atoms:
+                indices.append(index)
+                index += num_of_atom
+            self.indices = array(indices)
+        else:
+            self.indices = None
+
 
 class SetOfMolecules(ArciSet):
-    def __init__(self, file, num_of_molecules_from=None, num_of_molecules_to=None):
-        print("Loading of set of molecules from {}...".format(file))
-        super().__init__(file)
-        with open(file, "r") as sdf:
-            molecules_data = sdf.read()
+    def __init__(self, sdf_file, num_of_molecules=None, parameterization=None, submolecules=None):
+        self.submolecules = submolecules
+        self.molecules = []
+        self.file = sdf_file
+        print(f"Loading of set of molecules from {self.file}...")
+        molecules_data = open(self.file, "r").read()
+        self.num_of_molecules = self.submolecules if self.submolecules else num_of_molecules if num_of_molecules else molecules_data.count("$$$$")
         if molecules_data[-5:].strip() != "$$$$":
-            exit(colored("{} is not valid sdf file. Last line does not contain $$$$.\n".format(sdf.name), "red"))
-        molecules_data = [x.splitlines() for x in molecules_data.split("$$$$\n")]
-        num_of_all_molecules = len(molecules_data) - 1
-        if not num_of_molecules_to:
-            self.num_of_molecules_to = num_of_all_molecules
-        else:
-            if num_of_molecules_to > num_of_all_molecules:
-                exit(colored(("ERROR! There are only {}!".format(num_of_all_molecules)), "red"))
-            self.num_of_molecules_to = num_of_molecules_to
-        if not num_of_molecules_from:
-            self.num_of_molecules_from = 0
-        else:
-            self.num_of_molecules_from = num_of_molecules_from
-        for molecule_data in molecules_data[self.num_of_molecules_from:self.num_of_molecules_to]:
+            exit(colored(f"{self.file} is not valid sdf file. Last line does not contain $$$$.\n", "red"))
+        molecules_data = [x.splitlines() for x in molecules_data.split("$$$$\n")][:self.submolecules if self.submolecules else self.num_of_molecules]
+        for molecule_data in molecules_data:
             type_of_sdf_record = molecule_data[3][-5:]
             if type_of_sdf_record == "V2000":
                 self.load_sdf_v2000(molecule_data)
             elif type_of_sdf_record == "V3000":
                 self.load_sdf_v3000(molecule_data)
             else:
-                exit(colored("{} is not valid sdf file.\n".format(sdf), "red"))
+                exit(colored(f"{self.file} is not valid sdf file.\n", "red"))
         self.num_of_atoms = sum([len(molecule) for molecule in self.molecules])
+        print(f"    {self.num_of_molecules} molecules was loaded.")
         print(colored("ok\n", "green"))
+
+        if parameterization:
+            ref_chg_file, validation = parameterization
+            with open(ref_chg_file, "r") as reference_charges_file:
+                names = [data.splitlines()[0] for data in reference_charges_file.read().split("\n\n")[:-1]][:num_of_molecules]
+                sdf_names = []
+                for molecule in self.molecules:
+                    molecule_name = molecule.name.split("~~~")[0]
+                    if molecule_name not in sdf_names:
+                        sdf_names.append(molecule_name)
+                self.original_sdf_names = sdf_names
+                control_order_of_molecules(names, sdf_names, ref_chg_file, self.file)
+                self.original_order_molecules_names = names
+                print(f"Loading charges from {ref_chg_file}...")
+                reference_charges_file.seek(0)
+                if self.submolecules:
+                    for molecule, molecule_charge in zip(self.molecules, [atom_charge.split()[2] for molecule_charges in reference_charges_file.read().split("\n\n")[:-1] for atom_charge in molecule_charges.splitlines()[2:]]):
+                        molecule.charges = array([float(molecule_charge)])
+                else:
+                    for molecule_data, molecule in zip(reference_charges_file.read().split("\n\n")[:-1], self.molecules):
+                        molecule_charges = []
+                        for line in molecule_data.splitlines()[2:]:
+                            molecule_charges.append(float(line.split()[2]))
+                        molecule.charges = array(molecule_charges)
+            print(colored("ok\n", "green"))
+            print("Creating validation and parameterization sets...")
+            original_molecules = self.molecules
+            self.molecules = random.permutation(self.molecules)
+            num_of_molecules_par_val = int((1 - validation / 100) * self.num_of_molecules)
+            self.validation = copy(self)
+            self.validation.molecules = self.validation.molecules[num_of_molecules_par_val:]
+            self.validation.num_of_molecules = len(self.validation.molecules)
+            self.parameterization = copy(self)
+            self.parameterization.molecules = self.parameterization.molecules[:num_of_molecules_par_val]
+            self.parameterization.num_of_molecules = len(self.parameterization.molecules)
+            self.molecules = original_molecules
+            print(f"    {len(self.parameterization.molecules)} molecules in parameterization set.")
+            print(f"    {len(self.validation.molecules)} molecules in validation set.")
+            print(colored("ok\n", "green"))
 
     def load_sdf_v2000(self, molecular_data):
         name = molecular_data[0]
@@ -108,99 +149,79 @@ Number of bonds types: {}\n
                tabulate(table_atoms, headers=["Type", "Number", "%"]), num_of_bonds, len(counter_bonds), tabulate(table_bonds, headers=["Type", "Number", "%"]))
         print(data)
 
-    def add_ref_charges(self, file, num_of_atomic_types):
-        with open(file, "r") as charges_file:
-            names = [data.splitlines()[0] for data in charges_file.read().split("\n\n")[:-1]][self.num_of_molecules_from:self.num_of_molecules_to]
-            control_order_of_molecules(names, [molecule.name for molecule in self.molecules], file, self.file)
-        print("Loading charges from {}...".format(file))
-        with open(file, "r") as charges_file:
-            charges = []
-            for molecule_data, molecule in zip(charges_file.read().split("\n\n")[:-1][self.num_of_molecules_from:self.num_of_molecules_to], self.molecules):
-                molecule_charges = []
-                for line in molecule_data.splitlines():
-                    try:
-                        molecule_charges.append(float(line.split()[2]))
-                    except IndexError:
-                        pass
-                charges.extend(molecule_charges)
-                molecule.charges = array(molecule_charges)
-        self.ref_charges = array(charges, dtype=float32)
-        atomic_types_charges = [[] for _ in range(num_of_atomic_types)]
-        for charge, symbolic_number in zip(self.ref_charges, self.all_symbolic_numbers_atoms):
-            atomic_types_charges[symbolic_number].append(charge)
-        self.ref_atomic_types_charges = array([array(chg, dtype=float32) for chg in atomic_types_charges])
-        print(colored("ok\n", "green"))
-
     def create_method_data(self, method):
-        self.all_num_of_atoms = array([molecule.num_of_atoms for molecule in self], dtype=int64)
+        self.num_of_molecules = len(self.molecules)
+        self.all_num_of_atoms = array([molecule.num_of_atoms for molecule in self], dtype=int32)
         self.all_symbolic_numbers_atoms = concatenate([molecule.symbolic_numbers_atoms(method) for molecule in self], axis=0)
         if method.bond_types:
             self.all_symbolic_numbers_bonds = concatenate([molecule.symbolic_numbers_bonds(method) for molecule in self], axis=0)
         self.multiplied_all_symbolic_numbers_atoms = self.all_symbolic_numbers_atoms * len(method.atomic_parameters_types)
         for data in method.necessarily_data:
             setattr(self, "all_" + data, concatenate([getattr(molecule, data)() for molecule in self], axis=0))
+        if stack()[1][0].f_locals["self"].__class__.__name__ in ["Parameterization", "SubsetOfMolecules"]:
+            self.ref_charges = array([at_chg for molecule in self.molecules for at_chg in molecule.charges])
+            atomic_types_charges = [[] for _ in range(len(method.atomic_types))]
+            if self.submolecules:
+                self.create_indices(self.all_num_of_atoms)
+                self.all_symbolic_numbers_atoms_submolecules = self.all_symbolic_numbers_atoms[self.indices]
+            else:
+                self.indices = None
+            for charge, symbolic_number in zip(self.ref_charges, self.all_symbolic_numbers_atoms if not self.submolecules else self.all_symbolic_numbers_atoms_submolecules):
+                atomic_types_charges[symbolic_number].append(charge)
+            self.ref_atomic_types_charges = array([array(chg, dtype=float32) for chg in atomic_types_charges])
 
 
-class SubsetOfMolecules(SetOfMolecules):
-    def __init__(self, original_set_of_molecules, method, subset):
-        print("Creating of subset of molecules...")
-        mol_chg = []
-        index = 0
-        for molecule in original_set_of_molecules:
-            new_index = index + molecule.num_of_atoms
-            mol_chg.append((molecule, original_set_of_molecules.ref_charges[index: new_index]))
-            index = new_index
-        counter_atoms = Counter()
-        molecules = []
-        ref_charges = []
-        for molecule, charges in random.permutation(mol_chg):
+
+
+def select_molecules(all_molecules, subset, method, submolecules):
+    counter_atoms = Counter()
+    molecules = []
+    if submolecules:
+        for molecule in all_molecules:
+            atom = molecule.atoms_representation(method.atomic_types_pattern)[0]
+            if counter_atoms[atom] < subset:
+                counter_atoms.update((atom,))
+                molecules.append(molecule)
+            if all(counter_atoms[x] > subset for x in method.atomic_types):
+                break
+    else:
+        for molecule in all_molecules:
             atoms = molecule.atoms_representation(method.atomic_types_pattern)
             if any(counter_atoms[atom] < subset for atom in atoms):
                 counter_atoms.update(atoms)
                 molecules.append(molecule)
-                ref_charges.append(charges)
             if all(counter_atoms[x] > subset for x in method.atomic_types):
                 break
-        self.molecules = []
-        self.ref_charges = []
-        counter_atoms = Counter()
-        for molecule, charges in zip(molecules[::-1], ref_charges[::-1]):
-            atoms = molecule.atoms_representation(method.atomic_types_pattern)
-            if any(counter_atoms[atom] < subset for atom in atoms):
-                counter_atoms.update(atoms)
-                self.molecules.append(molecule)
-                self.ref_charges.append(charges)
-            if all(counter_atoms[x] > subset for x in method.atomic_types):
-                break
+    return molecules
+
+
+class SubsetOfMolecules(SetOfMolecules):
+    def __init__(self, original_set_of_molecules, method, subset, submolecules):
+        self.submolecules = submolecules
+        molecules = select_molecules(random.permutation(original_set_of_molecules.molecules), subset, method, self.submolecules)
+        self.molecules = select_molecules(molecules[::-1], subset, method, self.submolecules)
         if method.bond_types:
             counter_bonds = Counter()
             bond_format = "{}_{}".format(method.atomic_types_pattern, method.atomic_types_pattern)
-            for molecule, charges in zip(self.molecules, self.ref_charges):
+            for molecule in original_set_of_molecules.molecules:
                 bonds = molecule.bonds_representation(bond_format)
                 counter_bonds.update(bonds)
             if len(counter_bonds) != len(method.bond_types):
-                for molecule, charges in random.permutation(mol_chg):
+                for molecule in original_set_of_molecules.molecules:
                     bonds = molecule.bonds_representation(bond_format)
                     if any(counter_bonds[bond] < 1 for bond in bonds):
                         counter_bonds.update(bonds)
                         self.molecules.append(molecule)
-                        self.ref_charges.append(charges)
                     if len(counter_bonds) == len(method.bond_types):
                         break
-        self.ref_charges = array([y for x in self.ref_charges for y in x], dtype=float32)
-        self.num_of_molecules = len(self.molecules)
         super().create_method_data(method)
-        atomic_types_charges = [[] for _ in range(len(method.atomic_types))]
-        for charge, symbolic_number in zip(self.ref_charges, self.all_symbolic_numbers_atoms):
-            atomic_types_charges[symbolic_number].append(charge)
-        self.ref_atomic_types_charges = array([array(chg, dtype=float32) for chg in atomic_types_charges])
-        print("Subset of molecules contain {} molecules.".format(self.num_of_molecules))
 
 
 class SetOfMoleculesFromChargesFile(ArciSet):
     def __init__(self, file, ref=True):
         print("Loading of set of molecules from {}...".format(file))
-        super().__init__(file)
+        self.file = file
+        self.molecules = []
         with open(self.file, "r") as charges_file:
             molecules_data = [[line.split() for line in molecule.splitlines()]
                               for molecule in charges_file.read().split("\n\n")[:-1]]

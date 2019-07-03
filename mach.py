@@ -8,6 +8,7 @@ from modules.comparison import Comparison
 from modules.parameterization import Parameterization
 from modules.calculation_meta import calculation_meta
 from modules.parameterization_meta import parameterization_meta
+from modules.clusterization import clusterize
 from numba import jit
 import warnings
 warnings.filterwarnings("ignore")
@@ -52,6 +53,7 @@ if __name__ == '__main__':
                          args.cpu,
                          args.data_dir,
                          args.rewriting_with_force,
+                         args.create_submolecules,
                          args.git_hash)
 
     elif args.mode == "comparison":
@@ -84,4 +86,8 @@ if __name__ == '__main__':
                               args.validation,
                               args.cpu,
                               args.RAM,
-                              args.walltime)
+                              args.walltime,
+                              args.random_seed)
+
+    elif args.mode == "clusterization":
+        clusterize(args.charges, args.sdf)

@@ -5,16 +5,27 @@ from termcolor import colored
 from numpy import linalg
 
 
-def write_charges_to_file(charges, results, set_of_molecules):
+def write_charges_to_file(charges, results, set_of_molecules, submolecules):
     print("Writing charges to {}...".format(charges))
     with open(charges, "w") as file_with_results:
         count = 0
-        for molecule in set_of_molecules:
-            file_with_results.write("{}\n{}\n".format(molecule.name, molecule.num_of_atoms))
-            for index, atom in enumerate(molecule.atoms_representation("plain")):
-                file_with_results.write("{0:>3} {1:>3} {2:>15}\n".format(index + 1, atom, str(float("{0:.6f}".format(results[count])))))
-                count += 1
-            file_with_results.write("\n")
+        if not submolecules:
+            for molecule in set_of_molecules:
+                file_with_results.write("{}\n{}\n".format(molecule.name, molecule.num_of_atoms))
+                for index, atom in enumerate(molecule.atoms_representation("plain")):
+                    file_with_results.write("{0:>3} {1:>3} {2:>15}\n".format(index + 1, atom, str(float("{0:.6f}".format(results[count])))))
+                    count += 1
+                file_with_results.write("\n")
+        else:
+            for name in set_of_molecules.original_sdf_names:
+                lines = []
+                index = 1
+                while count != set_of_molecules.num_of_molecules and set_of_molecules[count].name.split("~~~")[0] == name:
+                    lines.append("{0:>3} {1:>3} {2:>15}\n".format(index, set_of_molecules[count].atoms_representation("plain")[0], str(float("{0:.6f}".format(results[count])))))
+                    index += 1
+                    count += 1
+                lines.insert(0, "{}\n{}\n".format(name, index-1))
+                file_with_results.write("".join(lines) + "\n")
     print(colored("ok\n", "green"))
 
 

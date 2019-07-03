@@ -38,7 +38,8 @@ def convert_bond(bond):
 
 
 class Methods:
-    def __init__(self):
+    def __init__(self, submolecules=None):
+        self.submolecules = submolecules
         self.necessarily_data = {"EEM": ["distances"],
                                  "QEq": ["distances"],
                                  "COMBA": ["distances"],
@@ -99,27 +100,27 @@ class Methods:
                 converted_atom = convert_atom(atom)
                 if converted_atom not in json_parameters_atoms:
                     self.parameters_json["atom"]["data"].append({"key": converted_atom, "value": [random.random() for _ in range(len(self.atomic_parameters_types))]})
-                    print(colored("Atom {} was added to parameters.".format(atom), "yellow"))
+                    print(colored("    Atom {} was added to parameters.".format(atom), "yellow"))
                 else:
                     json_parameters_atoms.remove(converted_atom)
             for atom in json_parameters_atoms:
                 for parameter in self.parameters_json["atom"]["data"]:
                     if parameter["key"] == atom:
                         self.parameters_json["atom"]["data"].remove(parameter)
-                print(colored("Atom {} was deleted from parameters.".format(convert_atom(atom)), "yellow"))
+                print(colored("    Atom {} was deleted from parameters.".format(convert_atom(atom)), "yellow"))
             if "bond" in self.parameters_json:
                 for bond in set_of_molecules_bonds:
                     converted_bond = convert_bond(bond)
                     if converted_bond not in json_parameters_bonds:
                         self.parameters_json["bond"]["data"].append({"key": converted_bond, "value": [random.random()]})
-                        print(colored("Bond {} was added to parameters.".format(bond), "yellow"))
+                        print(colored("     Bond {} was added to parameters.".format(bond), "yellow"))
                     else:
                         json_parameters_bonds.remove(converted_bond)
                 for bond in json_parameters_bonds:
                     for parameter in self.parameters_json["bond"]["data"]:
                         if parameter["key"] == bond:
                             self.parameters_json["bond"]["data"].remove(parameter)
-                    print(colored("Bond {} was deleted from parameters.".format(convert_bond(bond)[5:]), "yellow"))
+                    print(colored("    Bond {} was deleted from parameters.".format(convert_bond(bond)[5:]), "yellow"))
         self.parameters = {}
         if "common" in self.parameters_json:
             for name, value in zip(self.parameters_json["common"]["names"], self.parameters_json["common"]["values"]):
@@ -179,7 +180,7 @@ class Methods:
 
 
 @jit(nopython=True, cache=True)
-def eem_calculate(distances, symbols, all_num_of_atoms, parameters_values):
+def eem_calculate(distances, symbols, all_num_of_atoms, parameters_values, indices):
     results = empty(symbols.size, dtype=float64)
     kappa = parameters_values[-1]
     formal_charge = 0
@@ -204,13 +205,17 @@ def eem_calculate(distances, symbols, all_num_of_atoms, parameters_values):
         vector[-1] = formal_charge
         results[index: new_index] = solve(matrix, vector)[:-1]
         index = new_index
+
+    if indices is not None:
+        results = results[indices]
     return results
 
 
 class EEM(Methods):
     def calculate(self, set_of_molecules):
         self.results = eem_calculate(set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms,
-                                     set_of_molecules.all_num_of_atoms, self.parameters_values)
+                                     set_of_molecules.all_num_of_atoms, self.parameters_values, set_of_molecules.indices)
+
 
 
 @jit(nopython=True, cache=True)
@@ -482,7 +487,7 @@ def denr_calculate(all_num_of_atoms, all_denr_matrix, all_symbols, parameters_va
         a0 = dot(L, x0)
         AA = inv(I + parameters_values[-1] * B0)
         BB = parameters_values[-1] * a0
-        for x in range(3):
+        for _ in range(3):
             charges = dot(AA, (charges - BB))
         results[index: new_index] = charges
         index = new_index
