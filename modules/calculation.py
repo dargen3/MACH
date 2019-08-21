@@ -1,41 +1,25 @@
 from .set_of_molecules import SetOfMolecules
+from .submolecules import create_submolecules
 from .control_existing import control_existing_files
+from .output_files import write_charges_to_file
 from importlib import import_module
 from termcolor import colored
 from numpy import linalg
-
-
-def write_charges_to_file(charges, results, set_of_molecules, submolecules):
-    print("Writing charges to {}...".format(charges))
-    with open(charges, "w") as file_with_results:
-        count = 0
-        if not submolecules:
-            for molecule in set_of_molecules:
-                file_with_results.write("{}\n{}\n".format(molecule.name, molecule.num_of_atoms))
-                for index, atom in enumerate(molecule.atoms_representation("plain")):
-                    file_with_results.write("{0:>3} {1:>3} {2:>15}\n".format(index + 1, atom, str(float("{0:.6f}".format(results[count])))))
-                    count += 1
-                file_with_results.write("\n")
-        else:
-            for name in set_of_molecules.original_sdf_names:
-                lines = []
-                index = 1
-                while count != set_of_molecules.num_of_molecules and set_of_molecules[count].name.split("~~~")[0] == name:
-                    lines.append("{0:>3} {1:>3} {2:>15}\n".format(index, set_of_molecules[count].atoms_representation("plain")[0], str(float("{0:.6f}".format(results[count])))))
-                    index += 1
-                    count += 1
-                lines.insert(0, "{}\n{}\n".format(name, index-1))
-                file_with_results.write("".join(lines) + "\n")
-    print(colored("ok\n", "green"))
+from os.path import basename
 
 
 class Calculation:
-    def __init__(self, sdf, method, parameters, charges, atomic_types_pattern, rewriting_with_force):
-        control_existing_files(((sdf, True, "file"),
-                                (charges, False, "file")),
-                               rewriting_with_force)
+    def __init__(self, sdf, method, parameters, charges, atomic_types_pattern, submolecules, rewriting_with_force):
+        original_sdf = sdf
+        files = [(sdf, True, "file"),
+                 (charges, False, "file")]
+        if submolecules:
+            files.extend([(basename(sdf)+".submolecules", False, "file")])
+        control_existing_files(files, rewriting_with_force)
+        if submolecules:
+            submolecules, sdf = create_submolecules(sdf, cutoff=12)
         method = getattr(import_module("modules.methods"), method)()
-        set_of_molecules = SetOfMolecules(sdf)
+        set_of_molecules = SetOfMolecules(sdf, submolecules=submolecules)
         method.load_parameters(parameters, set_of_molecules, "calculation", atomic_types_pattern)
         set_of_molecules.create_method_data(method)
         print("Calculation of charges... ")
@@ -44,4 +28,7 @@ class Calculation:
         except (linalg.linalg.LinAlgError, ZeroDivisionError) as e:
             print(e)
         print(colored("ok\n", "green"))
+        if submolecules:
+            set_of_molecules = SetOfMolecules(original_sdf)
+            set_of_molecules.create_method_data(method)
         write_charges_to_file(charges, method.results, set_of_molecules)

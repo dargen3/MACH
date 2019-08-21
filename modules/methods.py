@@ -60,7 +60,7 @@ class Methods:
         try:
             self.parameters_json = load(open(parameters_file))
         except FileNotFoundError:
-            exit(colored("ERROR! There is no file {} in modules/parameters.".format(parameters_file)))
+            exit(colored("Error! There is no file {} in modules/parameters.".format(parameters_file)))
         self.atomic_types_pattern = atomic_types_pattern
         method_in_parameters_file = self.parameters_json["metadata"]["method"]
         if self.__class__.__name__ != method_in_parameters_file:
@@ -219,7 +219,7 @@ class EEM(Methods):
 
 
 @jit(nopython=True, cache=True)
-def sfkeem_calculate(distances, symbols, all_num_of_atoms, parameters_values):
+def sfkeem_calculate(distances, symbols, all_num_of_atoms, parameters_values, indices):
     results = empty(symbols.size, dtype=float64)
     sigma = parameters_values[-1]
     formal_charge = 0
@@ -248,17 +248,19 @@ def sfkeem_calculate(distances, symbols, all_num_of_atoms, parameters_values):
         matrix[num_of_atoms, num_of_atoms] = 0.0
         results[index: new_index] = solve(matrix, vector)[:-1]
         index = new_index
+    if indices is not None:
+        results = results[indices]
     return results
 
 
 class SFKEEM(Methods):
     def calculate(self, set_of_molecules):
         self.results = sfkeem_calculate(set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms,
-                                        set_of_molecules.all_num_of_atoms, self.parameters_values)
+                                        set_of_molecules.all_num_of_atoms, self.parameters_values, set_of_molecules.indices)
 
 
 @jit(nopython=True, cache=True)
-def qeq_calculate(distances, all_symbols, all_num_of_atoms, parameters_values):
+def qeq_calculate(distances, all_symbols, all_num_of_atoms, parameters_values, indices):
     results = empty(all_symbols.size, dtype=float64)
     formal_charge = 0
     index = 0
@@ -288,17 +290,19 @@ def qeq_calculate(distances, all_symbols, all_num_of_atoms, parameters_values):
         vector[-1] = formal_charge
         results[index: new_index] = solve(matrix, vector)[:-1]
         index = new_index
+    if indices is not None:
+        results = results[indices]
     return results
 
 
 class QEq(Methods):
     def calculate(self, set_of_molecules):
         self.results = qeq_calculate(set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms,
-                                     set_of_molecules.all_num_of_atoms, self.parameters_values)
+                                     set_of_molecules.all_num_of_atoms, self.parameters_values, set_of_molecules.indices)
 
 
 @jit(nopython=True, cache=True)
-def comba_calculate(distances, all_symbols, all_num_of_atoms, parameters_values):
+def comba_calculate(distances, all_symbols, all_num_of_atoms, parameters_values, indices):
     results = empty(all_symbols.size, dtype=float64)
     formal_charge = 0
     index = 0
@@ -328,18 +332,20 @@ def comba_calculate(distances, all_symbols, all_num_of_atoms, parameters_values)
         vector[-1] = formal_charge
         results[index: new_index] = solve(matrix, vector)[:-1]
         index = new_index
+    if indices is not None:
+        results = results[indices]
     return results
 
 
 class COMBA(Methods):
     def calculate(self, set_of_molecules):
         self.results = comba_calculate(set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms,
-                                           set_of_molecules.all_num_of_atoms, self.parameters_values)
+                                           set_of_molecules.all_num_of_atoms, self.parameters_values, set_of_molecules.indices)
 
 
 
 @jit(nopython=True, cache=True)
-def peoe_calculate(all_bonds, all_symbols, all_num_of_atoms, all_num_of_bonds, parameters_values):
+def peoe_calculate(all_bonds, all_symbols, all_num_of_atoms, all_num_of_bonds, parameters_values, indices):
     results = empty(all_symbols.size, dtype=float64)
     index_a = 0
     index_b = 0
@@ -367,6 +373,8 @@ def peoe_calculate(all_bonds, all_symbols, all_num_of_atoms, all_num_of_bonds, p
         results[index_a: new_index_a] = work_charges
         index_a = new_index_a
         index_b = new_index_b
+    if indices is not None:
+        results = results[indices]
     return results
 
 
@@ -374,11 +382,11 @@ class PEOE(Methods):
     def calculate(self, set_of_molecules):
         self.results = peoe_calculate(set_of_molecules.all_bonds_without_bond_type, set_of_molecules.multiplied_all_symbolic_numbers_atoms,
                                     set_of_molecules.all_num_of_atoms, set_of_molecules.all_num_of_bonds_mul_two,
-                                    self.parameters_values)
+                                    self.parameters_values, set_of_molecules.indices)
 
 
 @jit(nopython=True, cache=True)
-def mgc_calculate(all_num_of_atoms, all_mgc_matrix, all_symbols, parameters_values):
+def mgc_calculate(all_num_of_atoms, all_mgc_matrix, all_symbols, parameters_values, indices):
     results = empty(all_symbols.size, dtype=float64)
     index = 0
     counter_symbols = 0
@@ -395,16 +403,18 @@ def mgc_calculate(all_num_of_atoms, all_mgc_matrix, all_symbols, parameters_valu
                 counter += 1
         results[index: new_index] = (solve(matrix, vector) - vector)/(prod(vector)**(1/num_of_atoms))
         index = new_index
+    if indices is not None:
+        results = results[indices]
     return results
 
 
 class MGC(Methods):
     def calculate(self, set_of_molecules):
-        self.results = mgc_calculate(set_of_molecules.all_num_of_atoms, set_of_molecules.all_MGC_matrix, set_of_molecules.multiplied_all_symbolic_numbers_atoms, self.parameters_values)
+        self.results = mgc_calculate(set_of_molecules.all_num_of_atoms, set_of_molecules.all_MGC_matrix, set_of_molecules.multiplied_all_symbolic_numbers_atoms, self.parameters_values, set_of_molecules.indices)
 
 
 @jit(nopython=True, cache=True)
-def acks2_calculate(all_bonds, distances, all_symbols_atoms, all_symbols_bonds, all_num_of_atoms, all_num_of_bonds, parameters_values, num_of_bond_types):
+def acks2_calculate(all_bonds, distances, all_symbols_atoms, all_symbols_bonds, all_num_of_atoms, all_num_of_bonds, parameters_values, num_of_bond_types, indices):
     results = empty(all_symbols_atoms.size, dtype=float64)
     index_b = 0
     index_a = 0
@@ -454,17 +464,19 @@ def acks2_calculate(all_bonds, distances, all_symbols_atoms, all_symbols_bonds, 
         results[index_a: new_index_a] = solve(matrix, vector)[:num_of_atoms]
         index_a = new_index_a
         index_b = new_index_b
+    if indices is not None:
+        results = results[indices]
     return results
 
 
 class ACKS2(Methods):
     def calculate(self, set_of_molecules):
         self.results = acks2_calculate(set_of_molecules.all_bonds_without_bond_type, set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms, set_of_molecules.all_symbolic_numbers_bonds,
-                                       set_of_molecules.all_num_of_atoms, set_of_molecules.all_num_of_bonds_mul_two, self.parameters_values, len(self.bond_types))
+                                       set_of_molecules.all_num_of_atoms, set_of_molecules.all_num_of_bonds_mul_two, self.parameters_values, len(self.bond_types), set_of_molecules.indices)
 
 
 @jit(nopython=True, cache=True)
-def denr_calculate(all_num_of_atoms, all_denr_matrix, all_symbols, parameters_values):
+def denr_calculate(all_num_of_atoms, all_denr_matrix, all_symbols, parameters_values, indices):
     results = empty(all_symbols.size, dtype=float64)
     index = 0
     counter_symbols = 0
@@ -491,9 +503,11 @@ def denr_calculate(all_num_of_atoms, all_denr_matrix, all_symbols, parameters_va
             charges = dot(AA, (charges - BB))
         results[index: new_index] = charges
         index = new_index
+    if indices is not None:
+        results = results[indices]
     return results
 
 
 class DENR(Methods):
     def calculate(self, set_of_molecules):
-        self.results = denr_calculate(set_of_molecules.all_num_of_atoms, set_of_molecules.all_DENR_matrix, set_of_molecules.multiplied_all_symbolic_numbers_atoms, self.parameters_values)
+        self.results = denr_calculate(set_of_molecules.all_num_of_atoms, set_of_molecules.all_DENR_matrix, set_of_molecules.multiplied_all_symbolic_numbers_atoms, self.parameters_values, set_of_molecules.indices)

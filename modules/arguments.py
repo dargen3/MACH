@@ -25,7 +25,7 @@ def load_arguments():
     parser.add_argument("--RAM", help="Use for parameterization_meta and calculation_meta modes only. Define maximum RAM usage for META job in GB.", default=10, type=int)
     parser.add_argument("--walltime", help="Use for parameterization_meta and calculation_meta modes only. Define maximum time for META job in hours.", default=10, type=int)
     parser.add_argument("--git_hash", help="For internal usage only.")
-    parser.add_argument("--create_submolecules", help="Create submolecules to speed up parameterization and calculation of charges. Use for large molecules such proteins.", action="store_true")
+    parser.add_argument("--submolecules", help="Create submolecules to speed up parameterization and calculation of charges. Use for large molecules such proteins.", action="store_true")
     parser.add_argument("--validation", help="Define how many percent of set of molecules will be used for validation.", default=10, type=int)
     parser.add_argument("--atomic_types_pattern",
                         help="Use for set_of_molecules_info and parameterization only. Argument defines used atomic classifier.",
@@ -66,6 +66,9 @@ def load_arguments():
             parser.error("For clusterization mode choose --charges and --sdf.")
 
     if args.mode in ["parameterization", "parameterization_meta"] and type(args.num_of_molecules) == int and args.num_of_molecules < 2:
-        parser.error("There must be more then 1 molecule for parameterization!")
+        parser.error("Error! There must be more then 1 molecule for parameterization!")
+
+    if not 100 > args.validation > 0:
+        parser.error("Error! 1%-99% of set of molecules have to be used to validation!")
 
     return args

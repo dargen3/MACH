@@ -39,15 +39,24 @@ class ArciSet:
 
 
 class SetOfMolecules(ArciSet):
-    def __init__(self, sdf_file, num_of_molecules=None, parameterization=None, submolecules=None):
+    def __init__(self, sdf_file, num_of_molecules=None, parameterization=None, submolecules=None, random_seed=0):
+        random.seed(random_seed)
         self.submolecules = submolecules
         self.molecules = []
         self.file = sdf_file
         print(f"Loading of set of molecules from {self.file}...")
         molecules_data = open(self.file, "r").read()
-        self.num_of_molecules = self.submolecules if self.submolecules else num_of_molecules if num_of_molecules else molecules_data.count("$$$$")
+
+        molecules_in_file = molecules_data.count("$$$$")
+
+
+        self.num_of_molecules = self.submolecules if self.submolecules else num_of_molecules if num_of_molecules else molecules_in_file
+        if self.num_of_molecules > molecules_data.count("$$$$"):
+            exit(colored(f"Error! There is only {molecules_in_file} molecules in {self.file}.", "red"))
+
+
         if molecules_data[-5:].strip() != "$$$$":
-            exit(colored(f"{self.file} is not valid sdf file. Last line does not contain $$$$.\n", "red"))
+            exit(colored(f"Error! {self.file} is not valid sdf file. Last line does not contain $$$$.\n", "red"))
         molecules_data = [x.splitlines() for x in molecules_data.split("$$$$\n")][:self.submolecules if self.submolecules else self.num_of_molecules]
         for molecule_data in molecules_data:
             type_of_sdf_record = molecule_data[3][-5:]
@@ -59,19 +68,18 @@ class SetOfMolecules(ArciSet):
                 exit(colored(f"{self.file} is not valid sdf file.\n", "red"))
         self.num_of_atoms = sum([len(molecule) for molecule in self.molecules])
         print(f"    {self.num_of_molecules} molecules was loaded.")
+        sdf_names = []
+        for molecule in self.molecules:
+            molecule_name = molecule.name.split("~~~")[0]
+            if molecule_name not in sdf_names:
+                sdf_names.append(molecule_name)
+        self.original_sdf_names = sdf_names
         print(colored("ok\n", "green"))
-
         if parameterization:
-            ref_chg_file, validation = parameterization
+            ref_chg_file, self.validation_percent = parameterization
             with open(ref_chg_file, "r") as reference_charges_file:
                 names = [data.splitlines()[0] for data in reference_charges_file.read().split("\n\n")[:-1]][:num_of_molecules]
-                sdf_names = []
-                for molecule in self.molecules:
-                    molecule_name = molecule.name.split("~~~")[0]
-                    if molecule_name not in sdf_names:
-                        sdf_names.append(molecule_name)
-                self.original_sdf_names = sdf_names
-                control_order_of_molecules(names, sdf_names, ref_chg_file, self.file)
+                control_order_of_molecules(names, self.original_sdf_names, ref_chg_file, self.file)
                 self.original_order_molecules_names = names
                 print(f"Loading charges from {ref_chg_file}...")
                 reference_charges_file.seek(0)
@@ -87,13 +95,33 @@ class SetOfMolecules(ArciSet):
             print(colored("ok\n", "green"))
             print("Creating validation and parameterization sets...")
             original_molecules = self.molecules
+            if submolecules:
+                coupled_molecules = []
+                m = []
+                name = self.molecules[0].name.split("~~~")[0]
+                for molecule in self.molecules:
+                    if molecule.name.split("~~~")[0] == name:
+                        m.append(molecule)
+                    else:
+                        coupled_molecules.append(m)
+                        m = []
+                        name = molecule.name.split("~~~")[0]
+                        m.append(molecule)
+                coupled_molecules.append(m)
+                self.molecules = coupled_molecules
             self.molecules = random.permutation(self.molecules)
-            num_of_molecules_par_val = int((1 - validation / 100) * self.num_of_molecules)
+            num_of_molecules_par_val = int((1 - self.validation_percent / 100) * (self.num_of_molecules if not submolecules else len(self.molecules)))
+            if num_of_molecules_par_val == 0:
+                num_of_molecules_par_val = 1
             self.validation = copy(self)
-            self.validation.molecules = self.validation.molecules[num_of_molecules_par_val:]
-            self.validation.num_of_molecules = len(self.validation.molecules)
             self.parameterization = copy(self)
-            self.parameterization.molecules = self.parameterization.molecules[:num_of_molecules_par_val]
+            if not submolecules:
+                self.validation.molecules = self.validation.molecules[num_of_molecules_par_val:]
+                self.parameterization.molecules = self.parameterization.molecules[:num_of_molecules_par_val]
+            else:
+                self.validation.molecules = [submol for mol in self.validation.molecules[num_of_molecules_par_val:] for submol in mol]
+                self.parameterization.molecules = [submol for mol in self.parameterization.molecules[:num_of_molecules_par_val] for submol in mol]
+            self.validation.num_of_molecules = len(self.validation.molecules)
             self.parameterization.num_of_molecules = len(self.parameterization.molecules)
             self.molecules = original_molecules
             print(f"    {len(self.parameterization.molecules)} molecules in parameterization set.")
@@ -152,24 +180,26 @@ Number of bonds types: {}\n
     def create_method_data(self, method):
         self.num_of_molecules = len(self.molecules)
         self.all_num_of_atoms = array([molecule.num_of_atoms for molecule in self], dtype=int32)
-        self.all_symbolic_numbers_atoms = concatenate([molecule.symbolic_numbers_atoms(method) for molecule in self], axis=0)
-        if method.bond_types:
-            self.all_symbolic_numbers_bonds = concatenate([molecule.symbolic_numbers_bonds(method) for molecule in self], axis=0)
+        try:
+            self.all_symbolic_numbers_atoms = concatenate([molecule.symbolic_numbers_atoms(method) for molecule in self], axis=0)
+            if method.bond_types:
+                self.all_symbolic_numbers_bonds = concatenate([molecule.symbolic_numbers_bonds(method) for molecule in self], axis=0)
+        except ValueError as e:
+            exit(colored("Error! {} is not in last {}% of set of molecules used for validation!\n".format(str(e).split("'")[1], self.validation_percent), "red"))
         self.multiplied_all_symbolic_numbers_atoms = self.all_symbolic_numbers_atoms * len(method.atomic_parameters_types)
         for data in method.necessarily_data:
             setattr(self, "all_" + data, concatenate([getattr(molecule, data)() for molecule in self], axis=0))
+        if self.submolecules:
+            self.create_indices(self.all_num_of_atoms)
+            self.all_symbolic_numbers_atoms_submolecules = self.all_symbolic_numbers_atoms[self.indices]
+        else:
+            self.indices = None
         if stack()[1][0].f_locals["self"].__class__.__name__ in ["Parameterization", "SubsetOfMolecules"]:
             self.ref_charges = array([at_chg for molecule in self.molecules for at_chg in molecule.charges])
             atomic_types_charges = [[] for _ in range(len(method.atomic_types))]
-            if self.submolecules:
-                self.create_indices(self.all_num_of_atoms)
-                self.all_symbolic_numbers_atoms_submolecules = self.all_symbolic_numbers_atoms[self.indices]
-            else:
-                self.indices = None
             for charge, symbolic_number in zip(self.ref_charges, self.all_symbolic_numbers_atoms if not self.submolecules else self.all_symbolic_numbers_atoms_submolecules):
                 atomic_types_charges[symbolic_number].append(charge)
             self.ref_atomic_types_charges = array([array(chg, dtype=float32) for chg in atomic_types_charges])
-
 
 
 
@@ -203,17 +233,31 @@ class SubsetOfMolecules(SetOfMolecules):
         if method.bond_types:
             counter_bonds = Counter()
             bond_format = "{}_{}".format(method.atomic_types_pattern, method.atomic_types_pattern)
-            for molecule in original_set_of_molecules.molecules:
-                bonds = molecule.bonds_representation(bond_format)
-                counter_bonds.update(bonds)
+            for molecule in self.molecules:
+                counter_bonds.update(molecule.bonds_representation(bond_format))
             if len(counter_bonds) != len(method.bond_types):
-                for molecule in original_set_of_molecules.molecules:
-                    bonds = molecule.bonds_representation(bond_format)
-                    if any(counter_bonds[bond] < 1 for bond in bonds):
-                        counter_bonds.update(bonds)
-                        self.molecules.append(molecule)
-                    if len(counter_bonds) == len(method.bond_types):
-                        break
+                if not submolecules:
+                    for molecule in original_set_of_molecules.molecules:
+                        bonds = molecule.bonds_representation(bond_format)
+                        if any(counter_bonds[bond] < 1 for bond in bonds):
+                            counter_bonds.update(bonds)
+                            self.molecules.append(molecule)
+                        if len(counter_bonds) == len(method.bond_types):
+                            break
+                else:
+                    for molecule in original_set_of_molecules.molecules:
+                        bonds = []
+                        for bond, (i1, i2) in zip(molecule.bonds_representation(bond_format), molecule.bonds_representation("index_index")):
+                            bonds.append(bond)
+                            if i1 != 0:
+                                break
+                        if any(counter_bonds[bond] < 1 for bond in bonds):
+                            counter_bonds.update(bonds)
+                            self.molecules.append(molecule)
+                        if len(counter_bonds) == len(method.bond_types):
+                            break
+
+
         super().create_method_data(method)
 
 

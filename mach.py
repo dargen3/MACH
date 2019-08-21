@@ -35,6 +35,7 @@ if __name__ == '__main__':
                     args.parameters,
                     args.charges,
                     args.atomic_types_pattern,
+                    args.submolecules,
                     args.rewriting_with_force)
 
     elif args.mode == "parameterization":
@@ -53,7 +54,8 @@ if __name__ == '__main__':
                          args.cpu,
                          args.data_dir,
                          args.rewriting_with_force,
-                         args.create_submolecules,
+                         args.submolecules,
+                         args.random_seed,
                          args.git_hash)
 
     elif args.mode == "comparison":
@@ -87,7 +89,8 @@ if __name__ == '__main__':
                               args.cpu,
                               args.RAM,
                               args.walltime,
-                              args.random_seed)
+                              args.random_seed,
+                              args.submolecules)
 
     elif args.mode == "clusterization":
         clusterize(args.charges, args.sdf)

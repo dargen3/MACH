@@ -45,6 +45,7 @@ class Comparison:
             self.set_of_molecules_validation = set_of_molecules_nt(*validation[1])
             self.ref_set_of_molecules = ref_charges_data
             self.set_of_molecules = set_of_molecules_nt(*charges_data)
+
         else:
             output_file = "{}_{}.html".format(path.basename(charges_data).split(".")[0],
                                               path.basename(ref_charges_data).split(".")[0])
@@ -85,7 +86,12 @@ class Comparison:
                     continue
                 atomic_type_data = [round(item, 4) for item in calculate_statistics(ref_charges, charges)]
                 self.atomic_types_data_validation.append([atomic_type] + atomic_type_data + [round(atomic_type_data[4] / (self.all_atoms_data_validation[4] / 100), 2)])
+
+
         molecules_statistical_data = [calculate_statistics(ref_molecule.charges, molecule.charges) for ref_molecule, molecule in zip(self.ref_set_of_molecules, self.set_of_molecules.molecules)]
+
+
+
         molecules_num_of_atoms = [molecule[4] for molecule in molecules_statistical_data]
         self.molecules_data = [round(item, 4) for item in [mean([x[y] for x in molecules_statistical_data]) for y in range(4)] + [self.ref_set_of_molecules.num_of_molecules, min(molecules_num_of_atoms), max(molecules_num_of_atoms), mean(molecules_num_of_atoms)]]
 
