@@ -6,7 +6,7 @@ def load_arguments():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--mode", help="Choose the MACH mode.",
                         required=True,
-                        choices=("set_of_molecules_info", "calculation", "parameterization", "comparison",
+                        choices=("set_of_molecules_info", "calculation", "calculation_cutoff", "parameterization", "comparison",
                                  "calculation_meta", "parameterization_meta", "clusterization"))
     parser.add_argument("--sdf", help="Sdf file with molecules.")
     parser.add_argument("--charges", help="File to store calculated charges or file with charges for comparison.")
@@ -25,7 +25,6 @@ def load_arguments():
     parser.add_argument("--RAM", help="Use for parameterization_meta and calculation_meta modes only. Define maximum RAM usage for META job in GB.", default=10, type=int)
     parser.add_argument("--walltime", help="Use for parameterization_meta and calculation_meta modes only. Define maximum time for META job in hours.", default=10, type=int)
     parser.add_argument("--git_hash", help="For internal usage only.")
-    parser.add_argument("--submolecules", help="Create submolecules to speed up parameterization and calculation of charges. Use for large molecules such proteins.", action="store_true")
     parser.add_argument("--validation", help="Define how many percent of set of molecules will be used for validation.", default=10, type=int)
     parser.add_argument("--atomic_types_pattern",
                         help="Use for set_of_molecules_info and parameterization only. Argument defines used atomic classifier.",
@@ -43,6 +42,10 @@ def load_arguments():
     elif args.mode == "calculation":
         if args.method is None or args.sdf is None or args.charges is None:
             parser.error("For calculation mode choose --method, --sdf and --charges.")
+
+    elif args.mode == "calculation":
+        if args.method is None or args.sdf is None or args.charges is None:
+            parser.error("For calculation_cutoff mode choose --method, --sdf and --charges.")
 
     elif args.mode == "parameterization":
         if args.ref_charges is None or args.method is None \

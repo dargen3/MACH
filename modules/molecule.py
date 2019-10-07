@@ -2,8 +2,6 @@ from numpy import array, float32, int64, int16, zeros, float64, concatenate
 from scipy import spatial
 from sys import exit
 from termcolor import colored
-from .atom import Atom
-from .bond import Bond
 from numba import jit
 
 
@@ -18,14 +16,7 @@ class MoleculeChg:
         return self.atomic_types
 
 
-def create_atom_high_bond(num_of_atoms, bonds, atomic_symbols):
-    highest_bonds = [1] * num_of_atoms
-    for (atom1, atom2), bond_type in bonds:
-        if highest_bonds[atom1] < bond_type:
-            highest_bonds[atom1] = bond_type
-        if highest_bonds[atom2] < bond_type:
-            highest_bonds[atom2] = bond_type
-    return ["{}~{}".format(a, b) for a, b in zip(atomic_symbols, highest_bonds)]
+
 
 """
 ## smazat
@@ -87,17 +78,15 @@ def create_atom_bonded_atoms2(atoms, bonds_indexes, gap_symbol):
 
 ##
 """
+
+
+
 class Molecule:
-    def __init__(self, name, num_of_atoms, atomic_symbols, atomic_coordinates, bonds):
+    def __init__(self, name, atoms, bonds):
         self.name = name
-        self.num_of_atoms = num_of_atoms
-        self.atoms = []
-        atoms_high_bonds = create_atom_high_bond(self.num_of_atoms, bonds, atomic_symbols)
-        for index, (cor, atomic_symbol, symbol_high_bond) in enumerate(zip(atomic_coordinates, atomic_symbols, atoms_high_bonds)):
-            self.atoms.append(Atom(cor, atomic_symbol, symbol_high_bond, index))
-        self.bonds = []
-        for (a1, a2), type in bonds:
-            self.bonds.append(Bond(self.atoms[a1], self.atoms[a2], type))
+        self.num_of_atoms = len(atoms)
+        self.atoms = atoms
+        self.bonds = bonds
 
         ##smazat
         # self.bonded_atoms = create_atom_bonded_atoms(self.atoms_representation("hbo") ,self.bonds_representation("index_index") , "~")
@@ -117,7 +106,7 @@ class Molecule:
         return array([getattr(atom, pattern) for atom in self.atoms])
 
     def distances(self):
-        return array([value for index, line in enumerate(spatial.distance.cdist(self.atomic_coordinates, self.atomic_coordinates)) for value in line[index + 1:]], dtype=float32)
+        return concatenate([line[index + 1:] for index, line in enumerate(spatial.distance.cdist(self.atomic_coordinates, self.atomic_coordinates))]).astype(float32)
 
     def symbolic_numbers_atoms(self, method):
         return array([method.atomic_types.index(atomic_type) for atomic_type in self.atoms_representation(method.atomic_types_pattern)], dtype=int16)

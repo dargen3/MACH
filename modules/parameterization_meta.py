@@ -5,7 +5,7 @@ from termcolor import colored
 import git
 
 
-def parameterization_meta(sdf_file, ref_charges, parameters, method, optimization_method, minimization_method, atomic_types_pattern, num_of_molecules, num_of_samples, num_of_candidates, subset_heuristic, validation, cpu, RAM, walltime, random_seed, submolecules):
+def parameterization_meta(sdf_file, ref_charges, parameters, method, optimization_method, minimization_method, atomic_types_pattern, num_of_molecules, num_of_samples, num_of_candidates, subset_heuristic, validation, cpu, RAM, walltime, random_seed):
     if not parameters:
         parameters = "modules/parameters/{}.json".format(method)
     command = "./mach.py --mode parameterization --method {} --optimization_method {} --minimization_method {} --parameters {} --sdf {} --ref_charges {} " \
@@ -14,6 +14,5 @@ def parameterization_meta(sdf_file, ref_charges, parameters, method, optimizatio
                       basename(ref_charges), cpu, git.Repo(search_parent_directories=True).head.object.hexsha,
                       atomic_types_pattern, subset_heuristic, num_of_samples, validation, num_of_candidates, random_seed)
     command += " --num_of_molecules {} ".format(num_of_molecules) if num_of_molecules else ""
-    command += " --submolecules " if submolecules else ""
     system("./modules/parameterization_meta.sh {} {} {} '{}' {} {} {}".format(parameters, sdf_file, ref_charges, command, cpu,
                                                                               RAM, walltime))

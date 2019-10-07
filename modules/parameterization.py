@@ -4,7 +4,6 @@ from .output_files import write_charges_to_file
 from .comparison import Comparison
 from .molecule import MoleculeChg
 from .optimization_methods import local_minimization, guided_minimization
-from .submolecules import create_submolecules
 from importlib import import_module
 from termcolor import colored
 from numba import jit
@@ -13,7 +12,7 @@ from itertools import chain
 from datetime import datetime as date
 from datetime import timedelta
 from os import path, mkdir
-from shutil import copyfile, move
+from shutil import copyfile
 from numpy import sum, sqrt, abs, max, linalg, array, mean, empty, isnan
 import git
 from json import dumps
@@ -68,31 +67,29 @@ def rmsd_calculation_atomic_type(charges, symbolic_numbers_atoms, atomic_type_sy
 
 
 @jit(nopython=True)
-def rmsd_calculation_molecules(all_num_of_atoms, results, ref_charges, submolecules):
-    if submolecules is None:
-        total_molecules_rmsd = 0
-        index = 0
-        for num_of_atoms in all_num_of_atoms:
-            new_index = index + num_of_atoms
-            total_molecules_rmsd += sqrt(mean(abs(results[index: new_index] - ref_charges[index: new_index]) ** 2))
-            index = new_index
-        return total_molecules_rmsd / all_num_of_atoms.size
-    else:
-        return sqrt(mean(abs(results - ref_charges) ** 2))
+def rmsd_calculation_molecules(all_num_of_atoms, results, ref_charges):
+    total_molecules_rmsd = 0
+    index = 0
+    for num_of_atoms in all_num_of_atoms:
+        new_index = index + num_of_atoms
+        total_molecules_rmsd += sqrt(mean(abs(results[index: new_index] - ref_charges[index: new_index]) ** 2))
+        index = new_index
+    return total_molecules_rmsd / all_num_of_atoms.size
 
 
-def calculate_charges_and_statistical_data(list_of_parameters, method, set_of_molecules, submolecules):
+
+def calculate_charges_and_statistical_data(list_of_parameters, method, set_of_molecules):
     method.parameters_values = list_of_parameters
     try:
         method.calculate(set_of_molecules)
     except (linalg.linalg.LinAlgError, ZeroDivisionError):
         return 1000
     results = method.results
-    rmsd = rmsd_calculation_molecules(set_of_molecules.all_num_of_atoms, results, set_of_molecules.ref_charges, submolecules)
-    atomic_types_rmsd = [rmsd_calculation_atomic_type(results, set_of_molecules.all_symbolic_numbers_atoms if not submolecules else set_of_molecules.all_symbolic_numbers_atoms_submolecules, index, atomic_type_charges)
+    rmsd = rmsd_calculation_molecules(set_of_molecules.all_num_of_atoms, results, set_of_molecules.ref_charges)
+    atomic_types_rmsd = [rmsd_calculation_atomic_type(results, set_of_molecules.all_symbolic_numbers_atoms, index, atomic_type_charges)
                          for index, atomic_type_charges in enumerate(set_of_molecules.ref_atomic_types_charges)]
     greater_rmsd = max(atomic_types_rmsd)
-    print("Total RMSD: {}    Worst RMSD: {}".format(str(rmsd)[:8], str(greater_rmsd)[:8]), flush=True, end="\r")
+    print("Total RMSD: {}    Worst RMSD: {}".format(str(rmsd)[:8], str(greater_rmsd)[:8]), end="\r")
     objective_value = rmsd + mean(atomic_types_rmsd)
     if isnan(objective_value):
         return 1000
@@ -100,7 +97,7 @@ def calculate_charges_and_statistical_data(list_of_parameters, method, set_of_mo
 
 
 class Parameterization:
-    def __init__(self, sdf, ref_charges, parameters, method, optimization_method, minimization_method, atomic_types_pattern, num_of_molecules, num_of_samples, num_of_candidates, subset_heuristic, validation, cpu, data_dir, rewriting_with_force, submolecules, seed, git_hash=None):
+    def __init__(self, sdf, ref_charges, parameters, method, optimization_method, minimization_method, atomic_types_pattern, num_of_molecules, num_of_samples, num_of_candidates, subset_heuristic, validation, cpu, data_dir, rewriting_with_force, seed, git_hash=None):
         sdf_original = sdf
         start_time = date.now()
         files = [(sdf, True, "file"),
@@ -108,19 +105,13 @@ class Parameterization:
                  (data_dir, False, "directory")]
         if parameters is not None:
             files.extend([(parameters, True, "file")])
-        if submolecules:
-            files.extend([(path.basename(sdf)+".submolecules", False, "file")])
         control_existing_files(files,
                                rewriting_with_force)
-        if submolecules:
-            num_of_submolecules, sdf = create_submolecules(sdf, num_of_molecules)
-        else:
-            num_of_submolecules = None
-        set_of_molecules = SetOfMolecules(sdf, num_of_molecules=num_of_molecules, parameterization=(ref_charges, validation), submolecules=num_of_submolecules, random_seed=seed)
+        set_of_molecules = SetOfMolecules(sdf, num_of_molecules=num_of_molecules, parameterization=(ref_charges, validation), random_seed=seed)
         if len(sdf) < 2:
             exit(colored("Error! There must be more then 1 molecule for parameterization!\n"), "red")
         set_of_molecules_parameterization, set_of_molecules_validation = set_of_molecules.parameterization, set_of_molecules.validation
-        method = getattr(import_module("modules.methods"), method)(submolecules=submolecules)
+        method = getattr(import_module("modules.methods"), method)()
         method.load_parameters(parameters, set_of_molecules_parameterization, "parameterization", atomic_types_pattern=atomic_types_pattern)
         print("Preprocessing data...")
         set_of_molecules_parameterization.create_method_data(method)
@@ -129,9 +120,9 @@ class Parameterization:
 
         print(f"Parameterizating by {' '.join(optimization_method.split('_'))}...")
         if optimization_method == "local_minimization":
-            _, final_parameters = local_minimization(calculate_charges_and_statistical_data, method.parameters_values, minimization_method, method, set_of_molecules_parameterization, submolecules)
+            _, final_parameters = local_minimization(calculate_charges_and_statistical_data, method.parameters_values, minimization_method, method, set_of_molecules_parameterization)
         elif optimization_method == "guided_minimization":
-            final_parameters = guided_minimization(calculate_charges_and_statistical_data, set_of_molecules_parameterization, method, num_of_samples, cpu, subset_heuristic, submolecules, num_of_candidates, minimization_method)
+            final_parameters = guided_minimization(calculate_charges_and_statistical_data, set_of_molecules_parameterization, method, num_of_samples, cpu, subset_heuristic, num_of_candidates, minimization_method)
         print(colored("ok\n", "green"))
 
         method.new_parameters(final_parameters)
@@ -145,18 +136,6 @@ class Parameterization:
 
 
 
-        if submolecules:
-            set_of_molecules = SetOfMolecules(sdf_original, num_of_molecules=num_of_molecules, parameterization=(ref_charges, validation), random_seed=seed)
-            set_of_molecules_parameterization, set_of_molecules_validation = set_of_molecules.parameterization, set_of_molecules.validation
-            print("Preprocessing data...")
-            set_of_molecules_parameterization.create_method_data(method)
-            set_of_molecules_validation.create_method_data(method)
-            print(colored("ok\n", "green"))
-
-
-
-
-
 
         print("Preparing data for comparison...")
         atomic_types_charges_validation, chg_molecules_validation = prepare_data_for_comparison(method, set_of_molecules_validation, results_validation)
@@ -166,8 +145,7 @@ class Parameterization:
 
         mkdir(data_dir)
         copyfile(sdf_original, path.join(data_dir, path.basename(sdf_original)))
-        if submolecules:
-            move(sdf, path.join(data_dir, path.basename(sdf)))
+
         copyfile(ref_charges, path.join(data_dir, path.basename(ref_charges)))
         copyfile(parameters if parameters is not None else "modules/parameters/{}.json".format(str(method)), path.join(data_dir, "original_parameters.json"))
         print(colored("ok\n", "green"))

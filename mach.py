@@ -4,6 +4,7 @@ from numpy import random
 from modules.arguments import load_arguments
 from modules.set_of_molecules import SetOfMolecules
 from modules.calculation import Calculation
+from modules.calculation_cutoff import CalculationCutoff
 from modules.comparison import Comparison
 from modules.parameterization import Parameterization
 from modules.calculation_meta import calculation_meta
@@ -35,7 +36,14 @@ if __name__ == '__main__':
                     args.parameters,
                     args.charges,
                     args.atomic_types_pattern,
-                    args.submolecules,
+                    args.rewriting_with_force)
+
+    elif args.mode == "calculation_cutoff":
+        CalculationCutoff(args.sdf,
+                    args.method,
+                    args.parameters,
+                    args.charges,
+                    args.atomic_types_pattern,
                     args.rewriting_with_force)
 
     elif args.mode == "parameterization":
@@ -54,7 +62,6 @@ if __name__ == '__main__':
                          args.cpu,
                          args.data_dir,
                          args.rewriting_with_force,
-                         args.submolecules,
                          args.random_seed,
                          args.git_hash)
 
@@ -89,8 +96,7 @@ if __name__ == '__main__':
                               args.cpu,
                               args.RAM,
                               args.walltime,
-                              args.random_seed,
-                              args.submolecules)
+                              args.random_seed)
 
     elif args.mode == "clusterization":
         clusterize(args.charges, args.sdf)

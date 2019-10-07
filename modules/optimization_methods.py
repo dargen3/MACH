@@ -7,7 +7,7 @@ from multiprocessing import Pool
 from operator import itemgetter
 
 
-def local_minimization(input_parameters, objective_function, minimization_method, charge_method, set_of_molecules, submolecules):
+def local_minimization(input_parameters, objective_function, minimization_method, charge_method, set_of_molecules):
     if str(charge_method) in ["SFKEEM", "QEq", "MGC"]:
         bounds = [[0.000001, 100000] for _ in range(len(input_parameters))]
     else:
@@ -15,7 +15,7 @@ def local_minimization(input_parameters, objective_function, minimization_method
 
     res = minimize(objective_function, input_parameters, method=minimization_method,
                    options={"maxiter": 10000}, bounds=bounds,
-                   args=(charge_method, set_of_molecules, submolecules))
+                   args=(charge_method, set_of_molecules))
     return res.fun, res.x
 
 
@@ -27,13 +27,13 @@ def modify_num_of_samples(num_of_samples, cpu):
     return num_of_samples_modif, chunksize
 
 
-def guided_minimization(objective_function, set_of_molecules, charge_method, num_of_samples, cpu, subset_heuristic, submolecules, num_of_candidates, minimization_method):
+def guided_minimization(objective_function, set_of_molecules, charge_method, num_of_samples, cpu, subset_heuristic, num_of_candidates, minimization_method):
     print("    Sampling...")
     num_of_samples_modif, chunksize = modify_num_of_samples(num_of_samples, cpu)
     samples = lhs(len(charge_method.parameters_values), num_of_samples_modif, *charge_method.bounds[0])
 
     print("    Calculating of objective function for samples...")
-    partial_f = partial(objective_function, method=charge_method, set_of_molecules=set_of_molecules if subset_heuristic == 0 else SubsetOfMolecules(set_of_molecules, charge_method, subset_heuristic, submolecules), submolecules=submolecules)
+    partial_f = partial(objective_function, method=charge_method, set_of_molecules=set_of_molecules if subset_heuristic == 0 else SubsetOfMolecules(set_of_molecules, charge_method, subset_heuristic))
     with Pool(cpu) as pool:
         candidates_rmsd = list(pool.imap(partial_f, samples, chunksize=chunksize))
 
@@ -42,10 +42,10 @@ def guided_minimization(objective_function, set_of_molecules, charge_method, num
 
     print("    Local minimizating...")
     if subset_heuristic and str(charge_method) in ["EEM", "SFKEEM", "ACKS2", "QEq", "Comba"]:
-        partial_f = partial(local_minimization, objective_function=objective_function, minimization_method=minimization_method, charge_method=charge_method, set_of_molecules=SubsetOfMolecules(set_of_molecules, charge_method, subset_heuristic * 3, submolecules), submolecules=submolecules)
+        partial_f = partial(local_minimization, objective_function=objective_function, minimization_method=minimization_method, charge_method=charge_method, set_of_molecules=SubsetOfMolecules(set_of_molecules, charge_method, subset_heuristic * 3))
         with Pool(cpu) as pool:
             main_candidates = [result[1] for result in pool.map(partial_f, [parameters for parameters in main_candidates])]
-    partial_f = partial(local_minimization, objective_function=objective_function, minimization_method=minimization_method, charge_method=charge_method, set_of_molecules=set_of_molecules, submolecules=submolecules)
+    partial_f = partial(local_minimization, objective_function=objective_function, minimization_method=minimization_method, charge_method=charge_method, set_of_molecules=set_of_molecules)
     with Pool(cpu) as pool:
         best_candidates = [result for result in pool.map(partial_f, [parameters for parameters in main_candidates])]
     best_candidates.sort(key=itemgetter(0))
