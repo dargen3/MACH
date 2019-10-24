@@ -120,7 +120,7 @@ class Parameterization:
 
         print(f"Parameterizating by {' '.join(optimization_method.split('_'))}...")
         if optimization_method == "local_minimization":
-            _, final_parameters = local_minimization(calculate_charges_and_statistical_data, method.parameters_values, minimization_method, method, set_of_molecules_parameterization)
+            final_parameters = local_minimization(method.parameters_values, calculate_charges_and_statistical_data, minimization_method, method, set_of_molecules_parameterization)
         elif optimization_method == "guided_minimization":
             final_parameters = guided_minimization(calculate_charges_and_statistical_data, set_of_molecules_parameterization, method, num_of_samples, cpu, subset_heuristic, num_of_candidates, minimization_method)
         print(colored("ok\n", "green"))

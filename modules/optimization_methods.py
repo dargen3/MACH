@@ -16,7 +16,7 @@ def local_minimization(input_parameters, objective_function, minimization_method
     res = minimize(objective_function, input_parameters, method=minimization_method,
                    options={"maxiter": 10000}, bounds=bounds,
                    args=(charge_method, set_of_molecules))
-    return res.fun, res.x
+    return res.x
 
 
 def modify_num_of_samples(num_of_samples, cpu):

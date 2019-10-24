@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-from termcolor import colored
-from numpy import random
 from modules.arguments import load_arguments
-from modules.set_of_molecules import SetOfMolecules
 from modules.calculation import Calculation
 from modules.calculation_cutoff import CalculationCutoff
+from modules.calculation_meta import calculation_meta
+from modules.clusterization import clusterize
 from modules.comparison import Comparison
 from modules.parameterization import Parameterization
-from modules.calculation_meta import calculation_meta
 from modules.parameterization_meta import parameterization_meta
-from modules.clusterization import clusterize
+from modules.set_of_molecules import SetOfMolecules
+
 from numba import jit
-import warnings
-warnings.filterwarnings("ignore")
+from numpy import random
+from termcolor import colored
+from warnings import filterwarnings
+
+filterwarnings("ignore")
 
 
 @jit(nopython=True, cache=True)

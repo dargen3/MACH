@@ -28,7 +28,7 @@ def load_arguments():
     parser.add_argument("--validation", help="Define how many percent of set of molecules will be used for validation.", default=10, type=int)
     parser.add_argument("--atomic_types_pattern",
                         help="Use for set_of_molecules_info and parameterization only. Argument defines used atomic classifier.",
-                        choices=("plain", "hbo"), default="hbo")
+                        choices=("plain", "hbo", "hbob"), default="hbo")  # hbob
     parser.add_argument("--num_of_molecules", help="Number of molecules loaded.", type=int)
     parser.add_argument("-f", "--rewriting_with_force", action="store_true",
                         help="All MACH output files and directories will be rewritten.")

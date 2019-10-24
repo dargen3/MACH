@@ -124,7 +124,7 @@ class Comparison:
         color_numbers = {"H~1": 0, "O~1": 2, "O~2": 4, "N~1": 6, "N~2": 8, "C~1": 10, "C~2": 12, "S~1": 14,
                          "Ca~1": 16, "S~2": 18, "P~1": 1, "P~2": 3, "N~3": 5, "C~3": 7, "Br~1": 9, "Cl~1": 11,
                          "F~1": 13, "I~1": 15, "H": 0, "C": 2, "N": 4, "O": 6, "S": 8, "I": 10, "F": 12, "Br": 14, "Cl": 16, "P": 18, "Ca": 1}
-        correlation_graph_parameterization = figure(plot_width=900,
+        correlation_graph_parameterization = figure(plot_width=900 + 100 * (len(self.ref_set_of_molecules.atomic_types_charges.items())//33+1),
                                                     plot_height=900,
                                                     title="Correlation graph",
                                                     x_axis_label="Reference charges",
@@ -139,12 +139,17 @@ class Comparison:
         correlation_graph_parameterization.line([-1000, 1000], [-1000, 1000])
         zipped_charges = list(zip(self.ref_set_of_molecules.atomic_types_charges.items(),
                                   self.set_of_molecules.atomic_types_charges.items()))
+        legends_p = [[] for x in range(len(zipped_charges)//33+1)]
         for index, ((atomic_symbol, ref_charges), (_, charges)) in enumerate(zipped_charges):
             try:
                 color = Category20[20][color_numbers[atomic_symbol]]
             except KeyError:
                 color = Category20[20][index % 20]
-            correlation_graph_parameterization.circle(ref_charges, charges, size=6, legend=atomic_symbol, fill_color=color, line_color=color)
+            oc = correlation_graph_parameterization.circle(ref_charges, charges, size=6, fill_color=color, line_color=color)
+            legends_p[index//33].append((atomic_symbol, [oc]))
+        for x in range(len(zipped_charges)//33+1):
+            correlation_graph_parameterization.add_layout(Legend(items=legends_p[x], location="center"), 'left')
+
         correlation_graph_parameterization.legend.location = "top_left"
         correlation_graph_parameterization.legend.click_policy = "hide"
         max_charge = max((max(self.ref_set_of_molecules.ref_charges), max(self.set_of_molecules.all_charges)))
@@ -156,7 +161,7 @@ class Comparison:
         correlation_graph_parameterization.y_range = Range1d(min_charge, max_charge)
 
         if self.parameterization:
-            correlation_graph_validation = figure(plot_width=900,
+            correlation_graph_validation = figure(plot_width=900 + 100 * (len(self.ref_set_of_molecules_validation.atomic_types_charges.items())//33+1),
                                                   plot_height=900,
                                                   title="Correlation graph - validation",
                                                   x_axis_label="Reference charges",
@@ -171,18 +176,24 @@ class Comparison:
             correlation_graph_validation.line([-1000, 1000], [-1000, 1000])
             zipped_charges = list(zip(self.ref_set_of_molecules_validation.atomic_types_charges.items(),
                                       self.set_of_molecules_validation.atomic_types_charges.items()))
+            legends_v = [[] for x in range(len(zipped_charges) // 33 + 1)]
+
             for index, ((atomic_symbol, ref_charges), (_, charges)) in enumerate(zipped_charges):
                 try:
                     color = Category20[20][color_numbers[atomic_symbol]]
                 except KeyError:
                     color = Category20[20][index % 20]
-                correlation_graph_validation.circle(ref_charges, charges, size=6, legend=atomic_symbol, fill_color=color, line_color=color)
+                ov = correlation_graph_validation.circle(ref_charges, charges, size=6, fill_color=color, line_color=color)
+                legends_v[index // 33].append((atomic_symbol, [ov]))
+            for x in range(len(zipped_charges) // 33 + 1):
+                correlation_graph_validation.add_layout(Legend(items=legends_v[x]), 'left')
+
             correlation_graph_validation.legend.location = "top_left"
             correlation_graph_validation.legend.click_policy = "hide"
             correlation_graph_validation.x_range = Range1d(min_charge, max_charge)
             correlation_graph_validation.y_range = Range1d(min_charge, max_charge)
 
-            comparison = figure(plot_width=900,
+            comparison = figure(plot_width=900 + 100 * (len(self.ref_set_of_molecules_validation.atomic_types_charges.items())//33+1),
                                 plot_height=900,
                                 title="Correlation graph - validation",
                                 x_axis_label="Reference charges",

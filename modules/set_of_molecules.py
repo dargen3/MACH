@@ -12,6 +12,7 @@ from .bond import Bond
 
 
 
+
 def create_atom_high_bond(num_of_atoms, bonds, atomic_symbols):
     highest_bonds = [1] * num_of_atoms
     for bond in bonds:
@@ -122,12 +123,15 @@ class SetOfMolecules(ArciSet):
         atomic_symbols, atomic_coordinates, bonds = [], [], []
         for atom_line in molecular_data[4: num_of_atoms + 4]:
             line = atom_line.split()
-            atomic_coordinates.append((float(line[0]), float(line[1]), float(line[2])))
+            atomic_coordinates.append(array([float(line[0]), float(line[1]), float(line[2])], dtype=float32))
             atomic_symbols.append(line[3])
 
 
 
         atoms = [Atom(cor, atomic_symbol,index) for index, (cor, atomic_symbol) in enumerate(zip(atomic_coordinates, atomic_symbols))]
+
+
+
 
         for bond_line in molecular_data[num_of_atoms + 4: num_of_atoms + num_of_bonds + 4]:
             # bonds.append((sort(int(bond_line[:3]), int(bond_line[3:6])), int(bond_line[8])))
@@ -150,7 +154,7 @@ class SetOfMolecules(ArciSet):
         atomic_symbols, atomic_coordinates, bonds = [], [], []
         for atom_line in molecular_data[7: num_of_atoms + 7]:
             line = atom_line.split()
-            atomic_coordinates.append((float(line[4]), float(line[5]), float(line[6])))
+            atomic_coordinates.append(array([float(line[4]), float(line[5]), float(line[6])], dtype=float32))
             atomic_symbols.append(line[3])
 
         atoms = [Atom(cor, atomic_symbol, index) for index, (cor, atomic_symbol) in enumerate(zip(atomic_coordinates, atomic_symbols))]

@@ -13,3 +13,5 @@ class Bond:
             return "{}-{}".format("-".join(sorted([self.atom1.hbo, self.atom2.hbo])), self.type_of_bond)
         elif representation == "plain_plain":
             return "-".join(sorted([self.atom1.plain, self.atom2.plain]))
+        elif representation == "hbob_hbob":
+            return "{}-{}".format("-".join(sorted([self.atom1.hbob, self.atom2.hbob])), self.type_of_bond)

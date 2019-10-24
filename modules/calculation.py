@@ -1,10 +1,11 @@
-from .set_of_molecules import SetOfMolecules
 from .control_existing import control_existing_files
 from .output_files import write_charges_to_file
+from .set_of_molecules import SetOfMolecules
+
 from importlib import import_module
-from termcolor import colored
-from numpy import linalg
 from os.path import basename
+from numpy import linalg
+from termcolor import colored
 
 
 class Calculation:

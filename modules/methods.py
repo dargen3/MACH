@@ -1,11 +1,10 @@
 from sys import exit
 from termcolor import colored
 from numba import jit
-from numpy import float64, empty, array, ones, zeros, sqrt, cosh, concatenate, int64, sum, prod, dot, delete, insert, random, identity
-from numpy.linalg import solve, eigvalsh, inv
+from numpy import float64, empty, array, ones, zeros, sqrt, cosh, sum, prod, dot, random, identity
+from numpy.linalg import solve, inv
 from math import erf
 from json import load
-from collections import Counter
 
 
 def convert_atom(atom):
@@ -14,7 +13,12 @@ def convert_atom(atom):
             return "{}~{}".format(atom[0], atom[2])
         elif atom[1] == "plain":
             return atom[0]
+        elif atom[1] == "hbob":
+            return "/".join([atom[0], atom[2]])
     elif isinstance(atom, str):
+        if "/" in atom:
+            s_atom = atom.split("/")
+            return [s_atom[0], "hbob", s_atom[1]]
         s_atom = atom.split("~")
         if len(s_atom) == 2:
             return [s_atom[0], "hbo", s_atom[1]]
@@ -25,13 +29,15 @@ def convert_atom(atom):
 def convert_bond(bond):
     if isinstance(bond, list):
         bond_atoms = "-".join(*sorted([bond[:2]]))
-        if bond[2] == "hbo":
+        if bond[2] in ["hbo", "hbob"]:
             return "bond-{}-{}".format(bond_atoms, bond[3])
         elif bond[2] == "plain":
             return "bond-{}".format(bond_atoms)
     elif isinstance(bond, str):
         s_bond = bond.split("-")
-        if "~" in bond:
+        if "/" in bond:
+            return [s_bond[0], s_bond[1], "hbob", bond[-1]]
+        elif "~" in bond:
             return [s_bond[0], s_bond[1], "hbo", bond[-1]]
         else:
             return [s_bond[0], s_bond[1], "plain", "*"]
@@ -59,7 +65,7 @@ class Methods:
         try:
             self.parameters_json = load(open(parameters_file))
         except FileNotFoundError:
-            exit(colored("Error! There is no file {} in modules/parameters.".format(parameters_file)))
+            exit(colored("Error! There is no file {}.".format(parameters_file)), "red")
         self.atomic_types_pattern = atomic_types_pattern
         method_in_parameters_file = self.parameters_json["metadata"]["method"]
         if self.__class__.__name__ != method_in_parameters_file:
@@ -98,7 +104,14 @@ class Methods:
             for atom in set_of_molecules_atoms:
                 converted_atom = convert_atom(atom)
                 if converted_atom not in json_parameters_atoms:
-                    self.parameters_json["atom"]["data"].append({"key": converted_atom, "value": [random.random() for _ in range(len(self.atomic_parameters_types))]})
+                    if converted_atom[1] == "hbob":
+                        for x in self.parameters_json["atom"]["data"]:
+                            if "~".join([x["key"][0], x["key"][2]]) == converted_atom[0]:
+                                vall = x["value"]
+                                break
+                        self.parameters_json["atom"]["data"].append({"key": converted_atom, "value": vall})
+                    else:
+                        self.parameters_json["atom"]["data"].append({"key": converted_atom, "value": [random.random() for _ in range(len(self.atomic_parameters_types))]})
                     print(colored("    Atom {} was added to parameters.".format(atom), "yellow"))
                 else:
                     json_parameters_atoms.remove(converted_atom)
@@ -111,16 +124,33 @@ class Methods:
                 for bond in set_of_molecules_bonds:
                     converted_bond = convert_bond(bond)
                     if converted_bond not in json_parameters_bonds:
-                        self.parameters_json["bond"]["data"].append({"key": converted_bond, "value": [random.random()]})
+                        if converted_bond[2] == "hbob":
+                            for x in self.parameters_json["bond"]["data"]:
+                                if x["key"][0] == converted_bond[0].split("/")[0] and x["key"][1] == converted_bond[1].split("/")[0] and x["key"][-1] == converted_bond[-1]:
+                                    vall = x["value"]
+                                    break
+                            self.parameters_json["bond"]["data"].append({"key": converted_bond, "value": vall})
+                        else:
+                            self.parameters_json["bond"]["data"].append({"key": converted_bond, "value": [random.random()]})
+
+
+
                         print(colored("     Bond {} was added to parameters.".format(bond), "yellow"))
                     else:
                         json_parameters_bonds.remove(converted_bond)
+
+
+
                 for bond in json_parameters_bonds:
                     for parameter in self.parameters_json["bond"]["data"]:
                         if parameter["key"] == bond:
                             self.parameters_json["bond"]["data"].remove(parameter)
                     print(colored("    Bond {} was deleted from parameters.".format(convert_bond(bond)[5:]), "yellow"))
+
+
+
         self.parameters = {}
+
         if "common" in self.parameters_json:
             for name, value in zip(self.parameters_json["common"]["names"], self.parameters_json["common"]["values"]):
                 self.parameters[name] = value
@@ -136,6 +166,7 @@ class Methods:
         if "bond" in self.parameters_json:
             for parameter in self.parameters_json["bond"]["data"]:
                 self.parameters[convert_bond(parameter["key"])] = parameter["value"][0]
+
         self.bond_types = sorted([key for key in self.parameters.keys() if key[:5] == "bond-"])
         writed_glob_par = -1
         num_of_atom_par = len(self.atomic_parameters_types) * len(self.atomic_types)
@@ -160,6 +191,8 @@ class Methods:
         self.parameters_values = array(parameters_values, dtype=float64)
         self.bounds = [(min(self.parameters_values), max(self.parameters_values))] * len(self.parameters_values)
         print(colored("ok\n", "green"))
+
+
 
     def new_parameters(self, new_parameters):
         self.parameters_values = new_parameters
@@ -455,15 +488,12 @@ def acks2_calculate(all_bonds, distances, all_symbols_atoms, all_symbols_bonds, 
         results[index_a: new_index_a] = solve(matrix, vector)[:num_of_atoms]
         index_a = new_index_a
         index_b = new_index_b
-    
     return results
 
 
 class ACKS2(Methods):
     def calculate(self, set_of_molecules):
-        self.results = acks2_calculate(set_of_molecules.all_bonds_without_bond_type, set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms, set_of_molecules.all_symbolic_numbers_bonds,
-                                       set_of_molecules.all_num_of_atoms, set_of_molecules.all_num_of_bonds_mul_two, self.parameters_values, len(self.bond_types))
-
+        self.results = acks2_calculate(set_of_molecules.all_bonds_without_bond_type, set_of_molecules.all_distances, set_of_molecules.multiplied_all_symbolic_numbers_atoms, set_of_molecules.all_symbolic_numbers_bonds, set_of_molecules.all_num_of_atoms, set_of_molecules.all_num_of_bonds_mul_two, self.parameters_values, len(self.bond_types))
 
 @jit(nopython=True, cache=True)
 def denr_calculate(all_num_of_atoms, all_denr_matrix, all_symbols, parameters_values):
