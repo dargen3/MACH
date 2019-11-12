@@ -28,29 +28,25 @@ if __name__ == '__main__':
         random.seed(args.random_seed)
         numba_seed(args.random_seed)
     print(colored("\nMACH is running with mode: {}\n".format(args.mode), "blue"))
-    if args.mode == "set_of_molecules_info":
-        set_of_molecules = SetOfMolecules(args.sdf, args.num_of_molecules)
-        set_of_molecules.info(args.atomic_types_pattern)
-
-    elif args.mode == "calculation":
-        Calculation(args.sdf,
+    if args.mode == "calculation":
+        Calculation(args.sdf_file,
                     args.method,
                     args.parameters,
-                    args.charges,
+                    args.emp_chg_file,
                     args.atomic_types_pattern,
                     args.rewriting_with_force)
 
     elif args.mode == "calculation_cutoff":
-        CalculationCutoff(args.sdf,
+        CalculationCutoff(args.sdf_file,
                     args.method,
                     args.parameters,
-                    args.charges,
+                    args.emp_chg_file,
                     args.atomic_types_pattern,
                     args.rewriting_with_force)
 
     elif args.mode == "parameterization":
-        Parameterization(args.sdf,
-                         args.ref_charges,
+        Parameterization(args.sdf_file,
+                         args.ref_chg_file,
                          args.parameters,
                          args.method,
                          args.optimization_method,
@@ -68,23 +64,23 @@ if __name__ == '__main__':
                          args.git_hash)
 
     elif args.mode == "comparison":
-        Comparison(args.ref_charges,
-                   args.charges,
-                   args.data_dir,
-                   args.rewriting_with_force)
+        Comparison().comparison(args.ref_chg_file,
+                                args.emp_chg_file,
+                                args.data_dir,
+                                args.rewriting_with_force)
 
     elif args.mode == "calculation_meta":
-        calculation_meta(args.sdf,
+        calculation_meta(args.sdf_file,
                          args.method,
                          args.parameters,
-                         args.charges,
+                         args.emp_chg_file,
                          args.atomic_types_pattern,
                          args.RAM,
                          args.walltime)
 
     elif args.mode == "parameterization_meta":
-        parameterization_meta(args.sdf,
-                              args.ref_charges,
+        parameterization_meta(args.sdf_file,
+                              args.ref_chg_file,
                               args.parameters,
                               args.method,
                               args.optimization_method,
@@ -101,4 +97,4 @@ if __name__ == '__main__':
                               args.random_seed)
 
     elif args.mode == "clusterization":
-        clusterize(args.charges, args.sdf)
+        clusterize(args.ref_chg_file, args.sdf_file)

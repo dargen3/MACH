@@ -1,4 +1,4 @@
-from .set_of_molecules import SubsetOfMolecules
+from .set_of_molecules import create_subset_of_molecules
 from .lhs import lhs
 from scipy.optimize import minimize
 from heapq import nsmallest
@@ -18,7 +18,6 @@ def local_minimization(input_parameters, objective_function, minimization_method
                    args=(charge_method, set_of_molecules))
     return res.x
 
-
 def modify_num_of_samples(num_of_samples, cpu):
     num_of_samples_cpu = num_of_samples / cpu
     iterations = int(num_of_samples_cpu / 20000) + 1
@@ -33,7 +32,7 @@ def guided_minimization(objective_function, set_of_molecules, charge_method, num
     samples = lhs(len(charge_method.parameters_values), num_of_samples_modif, *charge_method.bounds[0])
 
     print("    Calculating of objective function for samples...")
-    partial_f = partial(objective_function, method=charge_method, set_of_molecules=set_of_molecules if subset_heuristic == 0 else SubsetOfMolecules(set_of_molecules, charge_method, subset_heuristic))
+    partial_f = partial(objective_function, method=charge_method, set_of_molecules=set_of_molecules if subset_heuristic == 0 else create_subset_of_molecules(set_of_molecules, charge_method, subset_heuristic))
     with Pool(cpu) as pool:
         candidates_rmsd = list(pool.imap(partial_f, samples, chunksize=chunksize))
 
@@ -42,7 +41,7 @@ def guided_minimization(objective_function, set_of_molecules, charge_method, num
 
     print("    Local minimizating...")
     if subset_heuristic and str(charge_method) in ["EEM", "SFKEEM", "ACKS2", "QEq", "Comba"]:
-        partial_f = partial(local_minimization, objective_function=objective_function, minimization_method=minimization_method, charge_method=charge_method, set_of_molecules=SubsetOfMolecules(set_of_molecules, charge_method, subset_heuristic * 3))
+        partial_f = partial(local_minimization, objective_function=objective_function, minimization_method=minimization_method, charge_method=charge_method, set_of_molecules=create_subset_of_molecules(set_of_molecules, charge_method, subset_heuristic * 3))
         with Pool(cpu) as pool:
             main_candidates = [result[1] for result in pool.map(partial_f, [parameters for parameters in main_candidates])]
     partial_f = partial(local_minimization, objective_function=objective_function, minimization_method=minimization_method, charge_method=charge_method, set_of_molecules=set_of_molecules)

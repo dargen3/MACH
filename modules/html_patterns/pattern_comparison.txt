@@ -203,15 +203,13 @@ Average number of atoms</th></tr>
 <a href = "{}">{}</a>
 <h2>Reference charges file:</h2>
 <a href = "{}">{}</a>
-<h2>Molecules logs:</h2>
-<a href = "molecules.log">molecules.log</a>
 </div>
 
 <div id="Contact & Licence" class="tabcontent">
 <font size="5"><b>Author:</b> Ondrej Schindler</br> 
-<b>Email:</b> dargen3@centrum.cz</br> 
+<b>Email:</b> ondrej.schindler@mail.muni.cz</br> 
 <b>Source code:</b> <a href = "https://github.com/dargen3/MACH">https://github.com/dargen3/MACH</a></br>
-<b>Licence:</b> None</font> 
+<b>Licence:</b> BSD</font> 
 </div>
 
 

@@ -8,9 +8,9 @@ def load_arguments():
                         required=True,
                         choices=("set_of_molecules_info", "calculation", "calculation_cutoff", "parameterization", "comparison",
                                  "calculation_meta", "parameterization_meta", "clusterization"))
-    parser.add_argument("--sdf", help="Sdf file with molecules.")
-    parser.add_argument("--charges", help="File to store calculated charges or file with charges for comparison.")
-    parser.add_argument("--ref_charges", help="File with reference charges.")
+    parser.add_argument("--sdf_file", help="Sdf file with molecules.")
+    parser.add_argument("--emp_chg_file", help="File to store calculated charges or file with charges for comparison.")
+    parser.add_argument("--ref_chg_file", help="File with reference charges.")
     parser.add_argument("--parameters", help="File with parameters.")
     parser.add_argument("--method", help="Empirical method for calculation or parameterization partial atomic charges.",
                         choices=("EEM", "SFKEEM", "QEq", "PEOE", "MGC", "ACKS2", "COMBA", "DENR"))
@@ -25,7 +25,7 @@ def load_arguments():
     parser.add_argument("--RAM", help="Use for parameterization_meta and calculation_meta modes only. Define maximum RAM usage for META job in GB.", default=10, type=int)
     parser.add_argument("--walltime", help="Use for parameterization_meta and calculation_meta modes only. Define maximum time for META job in hours.", default=10, type=int)
     parser.add_argument("--git_hash", help="For internal usage only.")
-    parser.add_argument("--validation", help="Define how many percent of set of molecules will be used for validation.", default=10, type=int)
+    parser.add_argument("--validation", help="Define how many percent of set of molecules will be used for validation. Use 100 for maximum validation set.", default=10, type=int)
     parser.add_argument("--atomic_types_pattern",
                         help="Use for set_of_molecules_info and parameterization only. Argument defines used atomic classifier.",
                         choices=("plain", "hbo", "hbob"), default="hbo")  # hbob
@@ -36,42 +36,42 @@ def load_arguments():
     args = parser.parse_args()
 
     if args.mode == "set_of_molecules_info":
-        if args.sdf is None:
-            parser.error("For set_of_molecules_info mode choose --sdf.")
+        if args.sdf_file is None:
+            parser.error("For set_of_molecules_info mode choose --sdf_file.")
 
     elif args.mode == "calculation":
-        if args.method is None or args.sdf is None or args.charges is None:
-            parser.error("For calculation mode choose --method, --sdf and --charges.")
+        if args.method is None or args.sdf_file is None or args.emp_chg_file is None:
+            parser.error("For calculation mode choose --method, --sdf_file and --emp_chg_file.")
 
     elif args.mode == "calculation":
-        if args.method is None or args.sdf is None or args.charges is None:
-            parser.error("For calculation_cutoff mode choose --method, --sdf and --charges.")
+        if args.method is None or args.sdf_file is None or args.emp_chg_file is None:
+            parser.error("For calculation_cutoff mode choose --method, --sdf_file and --emp_chg_file.")
 
     elif args.mode == "parameterization":
-        if args.ref_charges is None or args.method is None \
-                or args.sdf is None or args.data_dir is None:
-            parser.error("For parameterization mode choose --ref_charges, --method, --sdf and --data_dir")
+        if args.ref_chg_file is None or args.method is None \
+                or args.sdf_file is None or args.data_dir is None:
+            parser.error("For parameterization mode choose --ref_chg_file, --method, --sdf_file and --data_dir")
 
     elif args.mode == "comparison":
-        if args.charges is None or args.ref_charges is None or args.data_dir is None:
-            parser.error("For comparison mode choose --charges, --ref_charges and --data_dir.")
+        if args.emp_chg_file is None or args.ref_chg_file is None or args.data_dir is None:
+            parser.error("For comparison mode choose --emp_chg_file, --ref_chg_file and --data_dir.")
 
     elif args.mode == "calculation_meta":
-        if args.method is None or args.sdf is None or args.charges is None:
-            parser.error("For calculation_meta mode choose --method, --sdf and --charges.")
+        if args.method is None or args.sdf_file is None or args.emp_chg_file is None:
+            parser.error("For calculation_meta mode choose --method, --sdf_file and --emp_chg_file.")
 
     elif args.mode == "parameterization_meta":
-        if args.ref_charges is None or args.method is None or args.sdf is None:
-            parser.error("For parameterization_meta mode choose --ref_charges, --method and --sdf. ")
+        if args.ref_chg_file is None or args.method is None or args.sdf_file is None:
+            parser.error("For parameterization_meta mode choose --ref_chg_file, --method and --sdf_file. ")
 
     elif args.mode == "clusterization":
-        if args.charges is None or args.sdf is None:
-            parser.error("For clusterization mode choose --charges and --sdf.")
+        if args.ref_chg_file is None or args.sdf_file is None:
+            parser.error("For clusterization mode choose --ref_chg_file and --sdf_file.")
 
     if args.mode in ["parameterization", "parameterization_meta"] and type(args.num_of_molecules) == int and args.num_of_molecules < 2:
         parser.error("Error! There must be more then 1 molecule for parameterization!")
 
-    if not 100 > args.validation > 0:
-        parser.error("Error! 1%-99% of set of molecules have to be used to validation!")
+    if not 101 > args.validation > 0:
+        parser.error("Error! 1%-99% of set of molecules have to be used to validation! 100 is used for maximum validation set.")
 
     return args

@@ -1,12 +1,11 @@
-from .set_of_molecules import SetOfMolecules, SetOfMoleculesFromChargesFile
+from .set_of_molecules import create_set_of_molecules
 from .control_order_of_molecules import control_order_of_molecules
 from .control_existing import control_existing_files
-from sys import exit
-from termcolor import colored
+from .input_output import add_charges_to_set_of_molecules
 from scipy.stats import kde
-from numpy import less, array, linspace
+from numpy import array, linspace
 from bokeh.layouts import column, row
-from bokeh.models import ColumnDataSource, Slider, Label, BoxSelectTool, Cross, Select
+from bokeh.models import ColumnDataSource, Slider, BoxSelectTool, Cross, Select
 from bokeh.plotting import figure
 from bokeh.models.widgets import PreText
 from bokeh.server.server import Server
@@ -36,11 +35,14 @@ def bonded_atoms_statistics(indices, atoms_data):
     Average charge: {}
     Average number of bonded atoms: {}
     """.format(num_of_atoms, round(average_charge, 4), average_num_of_bonded_atoms)
+    print(bonded_atoms.most_common(), num_of_atoms)
     for index, atom in enumerate(bonded_atoms.most_common()):
+        print(atom, num_of_atoms)
+        print(atom[1]/num_of_atoms)
         if atom[1]/num_of_atoms < 0.01:
             continue
         if index == 0:
-            data_text += "Average bonded atoms composition:  {} : {}\n".format(atom[0], round(atom[1]/num_of_atoms), 4)
+            data_text += "Average bonded atoms composition:  {} : {}\n".format(atom[0], round(atom[1]/num_of_atoms, 4))
         else:
             data_text += "                                       {} : {}\n".format(atom[0], round(atom[1]/num_of_atoms, 4))
     data_text += "\n\n"
@@ -50,37 +52,11 @@ def bonded_atoms_statistics(indices, atoms_data):
 def clusterize(charges_file, sdf_file):
     control_existing_files([(sdf_file, True, "file"),
                             (charges_file, True, "file")], None)
-    set_of_molecules = SetOfMolecules(sdf_file)
+    set_of_molecules = create_set_of_molecules(sdf_file, "hbo")
     charges_names = [data.splitlines()[0] for data in open(charges_file, "r").read().split("\n\n")[:-1]]
-    control_order_of_molecules(charges_names, [molecule.name for molecule in set_of_molecules], charges_file, sdf_file)
-    set_of_molecules_chg = SetOfMoleculesFromChargesFile(charges_file)
-    atomic_type_pattern = "hbo"
-    atomic_types = sorted(list(set(functools.reduce(operator.iconcat, [molecule.atoms_representation(atomic_type_pattern) for molecule in set_of_molecules], []))))
-
-    """
-    all_atomic_data = []
-    for molecule in set_of_molecules:
-        molecule_atoms_reprezentation = molecule.atoms_representation(atomic_type_pattern)
-        molecule_bonds_reprezentation = molecule.bonds_representation("index_index")
-        for index, atom in enumerate(molecule_atoms_reprezentation):
-            bonded_atoms = []
-            for i1, i2 in molecule_bonds_reprezentation:
-                if index in (i1, i2):
-                    if index == i1:
-                        bonded_atoms.append(molecule_atoms_reprezentation[i2])
-                    else:
-                        bonded_atoms.append(molecule_atoms_reprezentation[i1])
-            bonded_atoms.sort()
-            bonded_atoms.insert(0, atom)
-            all_atomic_data.append(str(bonded_atoms))
-    from collections import Counter
-    counter = Counter(all_atomic_data)
-    print(len(counter))
-    from pprint import pprint ; pprint(counter.most_common())
-    from sys import exit ; exit()
-    """
-
-
+    control_order_of_molecules(charges_names, [molecule.name for molecule in set_of_molecules.molecules], charges_file, sdf_file)
+    add_charges_to_set_of_molecules(set_of_molecules, charges_file)
+    atomic_types = sorted(list(set(functools.reduce(operator.iconcat, [molecule.atoms_representation for molecule in set_of_molecules.molecules], []))))
 
 
     def modify_doc(doc):
@@ -124,10 +100,10 @@ def clusterize(charges_file, sdf_file):
             all_data = []
             atomic_type = new
             source_charges.selected.indices = []
-            for molecule, molecule_chg in zip(set_of_molecules, set_of_molecules_chg):
-                molecule_atoms_reprezentation = molecule.atoms_representation(atomic_type_pattern)
-                molecule_bonds_reprezentation = molecule.bonds_representation("index_index")
-                for index, (atom, charge) in enumerate(zip(molecule_atoms_reprezentation, molecule_chg.charges)):
+            for molecule in set_of_molecules.molecules:
+                molecule_atoms_reprezentation = molecule.atoms_representation
+                molecule_bonds_reprezentation = [bond[:2] for bond in molecule.bonds]
+                for index, (atom, charge) in enumerate(zip(molecule_atoms_reprezentation, molecule.ref_charges)):
                     if atomic_type in atom:
                         bonded_atoms = [charge]
                         for i1, i2 in molecule_bonds_reprezentation:

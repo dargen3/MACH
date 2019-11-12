@@ -9,10 +9,8 @@ body {{font-family: Arial;}}
 
 /* Style the tab */
     .centered {{
-      display : block;
-      margin : 0 auto;
-      text-align: left;
-      width: 800px;
+  margin: auto;
+  width: 70%;
       }}
 
 .tab {{
@@ -228,8 +226,8 @@ Average number of atoms</th></tr>
 <table id="bonds">
       <thead>
         <th onclick="sortTable(0, 'bonds', 'str')"><a class="sort-by">Type</th>
-        <th onclick="sortTable(1, 'bonds', 'num')"><a class="sort-by">Count</th>
-        <th onclick="sortTable(2, 'bonds', 'num')"><a class="sort-by">%</th>
+        <th onclick="sortTable(1, 'bonds', 'num')"><a class="sort-by">Count <sub>Parameterization set</sub></th>
+        <th onclick="sortTable(2, 'bonds', 'num')"><a class="sort-by">Count <sub>Validation set</sub></th>
       </thead>
       <tbody>
 {}
@@ -261,9 +259,6 @@ document.getElementById("json").innerHTML = JSON.stringify({}, undefined, 2);
 <a href = "{}">{}</a>
 <h2>Reference charges file</h2>
 <a href = "{}">{}</a>
-<h2>Molecules logs</h2>
-<a href = "molecules.log">molecules.log</a>
-
 </div>
 
 <div id="Contact & Licence" class="tabcontent">
