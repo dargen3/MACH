@@ -1,8 +1,8 @@
 from sys import exit
 from termcolor import colored
 from numba import jit
-from numpy import float64, empty, array, ones, zeros, sqrt, cosh, sum, prod, dot, random, identity
-from numpy.linalg import solve, inv
+from numpy import float64, empty, array, zeros, sqrt, sum, random
+from numpy.linalg import solve
 from math import erf
 from json import load
 

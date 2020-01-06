@@ -140,20 +140,23 @@ def create_subset_of_molecules(original_set_of_molecules, method, subset):
     molecules = _select_molecules(random.permutation(original_set_of_molecules.molecules), subset, atomic_types)
     molecules = _select_molecules(molecules[::-1], subset, atomic_types)
     if method == "ACKS2":
-        # add such molecules to subset of molecules to contain
-        # all bond types
+        # add such molecules to subset of molecules to contain all bond types
         bond_types = set([bond for molecule in original_set_of_molecules.molecules for bond in molecule.bonds_representation])
         counter_bonds = Counter()
         for molecule in molecules:
             counter_bonds.update(molecule.bonds_representation)
-        if any(counter_bonds[bond] < subset for bond in bond_types): # len(counter_bonds) != len(bond_types):
+
+        if any(counter_bonds[bond] < subset // 5 + 1 for bond in bond_types):
+            molecules_names = [molecule.name for molecule in molecules]
             for molecule in original_set_of_molecules.molecules:
                 bonds = molecule.bonds_representation
-                if any(counter_bonds[bond] < subset for bond in bonds):
+                if any(counter_bonds[bond] < subset // 5 + 1 for bond in bonds) and molecule.name not in molecules_names:
                     counter_bonds.update(bonds)
                     molecules.append(molecule)
-                if len(counter_bonds) == len(bond_types):
+                    molecules_names.append(molecule.name)
+                if all(counter_bonds[bond] >= subset // 5 + 1 for bond in bond_types):
                     break
+
     numba_molecules = List()
     [numba_molecules.append(molecule) for molecule in molecules]
     subset_of_molecules = SetOfMolecules(numba_molecules, original_set_of_molecules.sdf_file, len(molecules), sum([molecule.num_of_atoms for molecule in molecules]))

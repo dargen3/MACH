@@ -19,7 +19,7 @@ def load_arguments():
     parser.add_argument("--cpu", help="Use for \"guided minimization\" optimization method only. Define number of used CPU for parameterization.", default=1, type=int)
     parser.add_argument("--num_of_samples", help="Use for \"guided minimization\" optimization method only. Define number of used initial samples.", default=500000, type=int)
     parser.add_argument("--num_of_candidates", help="Use for \"guided minimization\" optimization method only. Define number of used candidates.", default=30, type=int)
-    parser.add_argument("--subset_heuristic", help="Use for \"guided minimization\" optimization method only. Minimal subset of molecules that contains n atoms of each atom type is used for first step of \"guided minimization\". If 0 is set, full set of molecules is used.", default=5, type=int)
+    parser.add_argument("--subset_heuristic", help="Use for \"guided minimization\" optimization method only. Minimal subset of molecules that contains n atoms of each atom type is used for first step of \"guided minimization\". If 0 is set, full set of molecules is used. Less value than 5 is not recommended.", default=5, type=int)
     parser.add_argument("--random_seed", help="Use for parameterization mode only. Set initial random state to guarantee reproduction of results. Set 0 for full random parameterization.", type=int, default=1)
     parser.add_argument("--data_dir", help="Use for parameterization and comparison modes only. Defined directory stores all computed data.")
     parser.add_argument("--RAM", help="Use for parameterization_meta and calculation_meta modes only. Define maximum RAM usage for META job in GB.", default=10, type=int)

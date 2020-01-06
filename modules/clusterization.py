@@ -35,10 +35,7 @@ def bonded_atoms_statistics(indices, atoms_data):
     Average charge: {}
     Average number of bonded atoms: {}
     """.format(num_of_atoms, round(average_charge, 4), average_num_of_bonded_atoms)
-    print(bonded_atoms.most_common(), num_of_atoms)
     for index, atom in enumerate(bonded_atoms.most_common()):
-        print(atom, num_of_atoms)
-        print(atom[1]/num_of_atoms)
         if atom[1]/num_of_atoms < 0.01:
             continue
         if index == 0:
@@ -49,12 +46,10 @@ def bonded_atoms_statistics(indices, atoms_data):
     return data_text
 
 
-def clusterize(charges_file, sdf_file):
+def clusterize(charges_file, sdf_file, atomic_types_pattern):
     control_existing_files([(sdf_file, True, "file"),
                             (charges_file, True, "file")], None)
-    set_of_molecules = create_set_of_molecules(sdf_file, "hbo")
-    charges_names = [data.splitlines()[0] for data in open(charges_file, "r").read().split("\n\n")[:-1]]
-    control_order_of_molecules(charges_names, [molecule.name for molecule in set_of_molecules.molecules], charges_file, sdf_file)
+    set_of_molecules = create_set_of_molecules(sdf_file, atomic_types_pattern)
     add_charges_to_set_of_molecules(set_of_molecules, charges_file)
     atomic_types = sorted(list(set(functools.reduce(operator.iconcat, [molecule.atoms_representation for molecule in set_of_molecules.molecules], []))))
 
@@ -104,7 +99,7 @@ def clusterize(charges_file, sdf_file):
                 molecule_atoms_reprezentation = molecule.atoms_representation
                 molecule_bonds_reprezentation = [bond[:2] for bond in molecule.bonds]
                 for index, (atom, charge) in enumerate(zip(molecule_atoms_reprezentation, molecule.ref_charges)):
-                    if atomic_type in atom:
+                    if atomic_type == atom:
                         bonded_atoms = [charge]
                         for i1, i2 in molecule_bonds_reprezentation:
                             if index in (i1, i2):

@@ -4,13 +4,13 @@ from .set_of_molecules import create_set_of_molecules_from_chg_files
 from termcolor import colored
 from numpy import sqrt, mean, max, min, sum, corrcoef
 from os import path, mkdir
-from collections import Counter
+from collections import Counter, defaultdict
 from bokeh.plotting import figure
 from bokeh.palettes import Reds, Greens, Blues, Greys
 from bokeh.resources import INLINE
 from bokeh.util.browser import view
 from bokeh.embed import components
-from bokeh.models import Legend, Range1d, Label
+from bokeh.models import Legend, Range1d, Label, ColumnDataSource
 from bokeh.models.widgets import Panel, Tabs
 from shutil import copyfile
 
@@ -123,12 +123,22 @@ class Comparison:
 
 
 
+        tooltips = [("Atomic type", "$name"),
+                    ("Reference charge", "@ref_charges"),
+                    ("Empirical charge", "@emp_charges"),
+                    ("Molecule", "@molecules"),
+                    ("Index", "@indices")]
+
         correlation_graph = figure(plot_width=900,
                                    plot_height=900,
                                    title="Correlation graph",
                                    x_axis_label="Reference charges",
                                    y_axis_label="Empirical charges",
-                                   output_backend="webgl")
+                                   output_backend="webgl",
+                                   tooltips=tooltips)
+        correlation_graph.toolbar.active_inspect = None
+
+
         correlation_graph.title.align = "center"
         correlation_graph.title.text_font_size = "17pt"
         correlation_graph.xaxis.axis_label_text_font_size = "25px"
@@ -136,11 +146,31 @@ class Comparison:
         correlation_graph.axis.major_label_text_font_size = '20px'
         correlation_graph.line([-1000, 1000], [-1000, 1000])
         legends_p = [[] for _ in range(len(self.set_of_molecules.ref_atomic_types_charges.items())//27+1)]
+
+        source_molecules = defaultdict(list)
+        source_indices = defaultdict(list)
+        for molecule in self.set_of_molecules.molecules:
+            for index, symbol in enumerate(molecule.atoms_representation, start=1):
+                source_molecules[symbol].append(molecule.name)
+                source_indices[symbol].append(index)
+
+
+
+
+
+
         for index, atomic_symbol in enumerate(self.set_of_molecules.atomic_types):
             color = colors[atomic_symbol]
-            ref_charges = self.set_of_molecules.ref_atomic_types_charges[atomic_symbol]
-            emp_charges = self.set_of_molecules.emp_atomic_types_charges[atomic_symbol]
-            oc = correlation_graph.circle(ref_charges, emp_charges, size=6, fill_color=color, line_color=color)
+            oc = correlation_graph.circle("ref_charges",
+                                          "emp_charges",
+                                          size=6,
+                                          fill_color=color,
+                                          line_color=color,
+                                          name=atomic_symbol,
+                                          source=ColumnDataSource(data=dict(emp_charges=self.set_of_molecules.emp_atomic_types_charges[atomic_symbol],
+                                                                            ref_charges=self.set_of_molecules.ref_atomic_types_charges[atomic_symbol],
+                                                                            indices=source_indices[atomic_symbol],
+                                                                            molecules=source_molecules[atomic_symbol])))
             legends_p[index//27].append((atomic_symbol, [oc]))
 
         plot_width = 944
@@ -174,12 +204,23 @@ class Comparison:
         correlation_graph.x_range = Range1d(min_charge, max_charge)
         correlation_graph.y_range = Range1d(min_charge, max_charge)
         if self.set_of_molecules_parameterization:
+
+            source_molecules_v = defaultdict(list)
+            source_indices_v = defaultdict(list)
+            for molecule in self.set_of_molecules_validation.molecules:
+                for index, symbol in enumerate(molecule.atoms_representation, start=1):
+                    source_molecules_v[symbol].append(molecule.name)
+                    source_indices_v[symbol].append(index)
+
+
             correlation_graph_validation = figure(plot_width=900,
                                                   plot_height=900,
                                                   title="Correlation graph - validation",
                                                   x_axis_label="Reference charges",
                                                   y_axis_label="Empirical charges",
-                                                  output_backend="webgl")
+                                                  output_backend="webgl",
+                                                  tooltips = tooltips)
+            correlation_graph_validation.toolbar.active_inspect = None
             correlation_graph_validation.title.align = "center"
             correlation_graph_validation.title.text_font_size = "17pt"
             correlation_graph_validation.xaxis.axis_label_text_font_size = "25px"
@@ -197,7 +238,17 @@ class Comparison:
                 except KeyError:
                     missed_types += 1
                     continue
-                ov = correlation_graph_validation.circle(ref_charges, emp_charges, size=6, fill_color=color, line_color=color)
+
+                ov = correlation_graph_validation.circle("ref_charges",
+                                                         "emp_charges",
+                                                         size=6,
+                                                         fill_color=color,
+                                                         line_color=color,
+                                                         name=atomic_symbol,
+                                                         source=ColumnDataSource(data=dict(emp_charges=emp_charges,
+                                                                                           ref_charges=ref_charges,
+                                                                                           indices=source_indices_v[atomic_symbol],
+                                                                                           molecules=source_molecules_v[atomic_symbol])))
                 legends_v[(index - missed_types) // 27].append((atomic_symbol, [ov]))
 
             for x in range(len(self.set_of_molecules_validation.atomic_types) // 27 + 1):

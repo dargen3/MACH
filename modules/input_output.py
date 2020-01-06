@@ -1,5 +1,5 @@
 from .molecule import Molecule
-from numpy import array, concatenate, int32, float32
+from numpy import array, int32, float32
 from termcolor import colored
 from numba.typed import List
 from .control_order_of_molecules import control_order_of_molecules
@@ -9,8 +9,8 @@ from .control_order_of_molecules import control_order_of_molecules
 def add_charges_to_set_of_molecules(set_of_molecules, ref_chg_file):
     with open(ref_chg_file, "r") as reference_charges_file:
         names = [data.splitlines()[0] for data in reference_charges_file.read().split("\n\n")[:-1]][:set_of_molecules.num_of_molecules]
-        control_order_of_molecules(names, [molecule.name for molecule in set_of_molecules.molecules], ref_chg_file, set_of_molecules.sdf_file)
         print(f"Loading charges from {ref_chg_file}...")
+        control_order_of_molecules(names, [molecule.name for molecule in set_of_molecules.molecules], ref_chg_file, set_of_molecules.sdf_file)
         reference_charges_file.seek(0)
         for molecule_data, molecule in zip(reference_charges_file.read().split("\n\n")[:-1], set_of_molecules.molecules):
             molecule_charges = []
@@ -61,6 +61,7 @@ def _create_atoms_bonds_representation(num_of_atoms, atomic_symbols, bonds, atom
     elif atomic_types_pattern == "hbob":
         bonded_atoms = [[] for _ in range(num_of_atoms)]
         for ba1, ba2, _ in bonds:
+
             bonded_atoms[ba1].append(atomic_symbols[ba2])
             bonded_atoms[ba2].append(atomic_symbols[ba1])
         [atoms_representation.append("{}/{}".format(hbo, "".join(sorted(bonded_atoms)))) for hbo, bonded_atoms in zip(_create_atom_highest_bond(num_of_atoms, bonds, atomic_symbols), bonded_atoms)]
@@ -120,4 +121,5 @@ def load_sdf_v3000(molecular_data, atomic_types_pattern):
         bonds.append((a1, a2, int(line[3])))
 
     atoms_representation, bonds_representation = _create_atoms_bonds_representation(num_of_atoms, atomic_symbols, bonds, atomic_types_pattern)
+
     return Molecule(name, num_of_atoms, array(atomic_coordinates, dtype=float32), atoms_representation, array(bonds, dtype=int32), bonds_representation)

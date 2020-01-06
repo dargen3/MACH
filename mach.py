@@ -97,4 +97,4 @@ if __name__ == '__main__':
                               args.random_seed)
 
     elif args.mode == "clusterization":
-        clusterize(args.ref_chg_file, args.sdf_file)
+        clusterize(args.ref_chg_file, args.sdf_file, args.atomic_types_pattern)
