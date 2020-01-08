@@ -71,12 +71,12 @@ class CalculationCutoff:
                 new_set_of_molecules.atomic_types = List.empty_list(string)
                 [new_set_of_molecules.atomic_types.append(atomic_type) for atomic_type in method.atomic_types]
                 for m in new_set_of_molecules.molecules:
-                    m.atoms_id = array([new_set_of_molecules.atomic_types.index(atomic_type) for atomic_type in m.atoms_representation], dtype=npint16) * len(method.atomic_parameters_types)
+                    m.atoms_id = array([new_set_of_molecules.atomic_types.index(atomic_type) for atomic_type in m.atoms_representation], dtype=npint16) * len(method.parameters["atom"]["names"])
                     # m.distance_matrix = distances[indices][:,indices].toarray()
                     m.distance_matrix = distance.cdist(m.atomic_coordinates, m.atomic_coordinates).astype(npfloat32)
                 if method.bond_types:
                     for m in new_set_of_molecules.molecules:
-                        m.bonds_id = array([method.bond_types.index("bond-{}".format(bond)) for bond in molecule.bonds_representation], dtype=npint16) + len(method.atomic_parameters_types) * len(method.atomic_types)
+                        m.bonds_id = array([method.bond_types.index("bond-{}".format(bond)) for bond in molecule.bonds_representation], dtype=npint16) + len(method.parameters["atom"]["names"]) * len(method.atomic_types)
 
 
 

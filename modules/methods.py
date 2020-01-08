@@ -5,169 +5,84 @@ from numpy import float64, empty, array, zeros, sqrt, sum, random
 from numpy.linalg import solve
 from math import erf
 from json import load
-
-
-def convert_atom(atom):
-    if isinstance(atom, list):
-        if atom[1] == "hbo":
-            return "{}~{}".format(atom[0], atom[2])
-        elif atom[1] == "plain":
-            return atom[0]
-        elif atom[1] == "hbob":
-            return "/".join([atom[0], atom[2]])
-    elif isinstance(atom, str):
-        if "/" in atom:
-            s_atom = atom.split("/")
-            return [s_atom[0], "hbob", s_atom[1]]
-        s_atom = atom.split("~")
-        if len(s_atom) == 2:
-            return [s_atom[0], "hbo", s_atom[1]]
-        elif len(s_atom) == 1:
-            return [atom, "plain", "*"]
-
-
-def convert_bond(bond):
-    if isinstance(bond, list):
-        bond_atoms = "-".join(*sorted([bond[:2]]))
-        if bond[2] in ["hbo", "hbob"]:
-            return "bond-{}-{}".format(bond_atoms, bond[3])
-        elif bond[2] == "plain":
-            return "bond-{}".format(bond_atoms)
-    elif isinstance(bond, str):
-        s_bond = bond.split("-")
-        if "/" in bond:
-            return [s_bond[0], s_bond[1], "hbob", bond[-1]]
-        elif "~" in bond:
-            return [s_bond[0], s_bond[1], "hbo", bond[-1]]
-        else:
-            return [s_bond[0], s_bond[1], "plain", "*"]
+from .convert_parameters import convert_parameters_schindler
 
 
 class Methods:
-
     def __repr__(self):
         return self.__class__.__name__
 
     def load_parameters(self, parameters_file, set_of_molecules, mode, atomic_types_pattern):
         if not parameters_file:
             parameters_file = "modules/parameters/{}.json".format(str(self))
-        print("Loading of parameters from {}...".format(parameters_file))
+
+        print(f"Loading of parameters from {parameters_file}...")
         try:
-            self.parameters_json = load(open(parameters_file))
+            self.parameters = load(open(parameters_file))
         except FileNotFoundError:
-            exit(colored("Error! There is no file {}.".format(parameters_file)), "red")
-        self.atomic_types_pattern = atomic_types_pattern
-        method_in_parameters_file = self.parameters_json["metadata"]["method"]
+            exit(colored(f"Error! There is no file {parameters_file}.", "red"))
+
+        method_in_parameters_file = self.parameters["metadata"]["method"]
         if self.__class__.__name__ != method_in_parameters_file:
-            exit(colored("These parameters are for method {} but you want to calculate charges by method {}!\n"
-                         .format(method_in_parameters_file, self.__class__.__name__), "red"))
-        self.atomic_parameters_types = self.parameters_json["atom"]["names"]
-        set_of_molecules_atoms = set([atom for molecule in set_of_molecules.molecules for atom in molecule.atoms_representation])
-        json_parameters_atoms = [parameters["key"] for parameters in self.parameters_json["atom"]["data"]]
-        if "bond" in self.parameters_json:
-            set_of_molecules_bonds = set([bond for molecule in set_of_molecules.molecules for bond in molecule.bonds_representation])
-            json_parameters_bonds = [parameters["key"] for parameters in self.parameters_json["bond"]["data"]]
+            exit(colored(f"Error! These parameters are for method {method_in_parameters_file}, but you selected by argument by method {self.__class__.__name__}!\n", "red"))
+
+        if isinstance(self.parameters["atom"]["data"], list):
+            self.parameters = convert_parameters_schindler(self.parameters)
+
+        if self.parameters["metadata"]["atomic_types_pattern"] != atomic_types_pattern:
+            exit(colored(f"Error! These parameters are for atomic types pattern {self.parameters['metadata']['atomic_types_pattern']}, but you selected by argument atomic types pattern {atomic_types_pattern}!\n", "red"))
+
+        # missing atoms and missing bond are atomic types and bond types which are in set of molecules but not in parameters
+        missing_atoms = set(set_of_molecules.atomic_types) - set(self.parameters["atom"]["data"].keys())
+        if "bond" in self.parameters:
+            missing_bonds = set(set_of_molecules.bond_types) - set(self.parameters["bond"]["data"].keys())
+
         if mode == "calculation":
-            missing_atoms = []
-            for atom in set_of_molecules_atoms:
-                converted_atom = convert_atom(atom)
-                if converted_atom not in json_parameters_atoms:
-                    if "fixed" in self.parameters_json:
-                        if atom not in self.parameters_json["fixed"].keys():
-                            missing_atoms.append(atom)
-                    else:
-                        missing_atoms.append(atom)
+            exit_status = False
             if missing_atoms:
-                print(colored("Atomic type(s) {} is not defined in parameters.".format(", ".join(missing_atoms)), "red"))
-            if "bond" in self.parameters_json:
-                missing_bonds = []
-                for bond in set_of_molecules_bonds:
-                    converted_bond = convert_bond(bond)
-                    if converted_bond not in json_parameters_bonds:
-                        missing_bonds.append(bond)
+                print(colored(f"Error! Atomic type(s) {', '.join(missing_atoms)} is not defined in parameters.", "red"))
+                exit_status = True
+            if "bond" in self.parameters:
                 if missing_bonds:
-                    exit(colored("Bond type(s) {} is not defined in parameters.".format(", ".join(missing_bonds)), "red"))
-            if missing_atoms:
+                    print(colored(f"Error! Bond type(s) {', '.join(missing_bonds)} is not defined in parameters.", "red"))
+                    exit_status = True
+            if exit_status:
                 exit()
+
         elif mode == "parameterization":
-            for atom in set_of_molecules_atoms:
-                converted_atom = convert_atom(atom)
-                if converted_atom not in json_parameters_atoms:
-                    if converted_atom[1] == "hbob":
-                        for x in self.parameters_json["atom"]["data"]:
-                            if "~".join([x["key"][0], x["key"][2]]) == converted_atom[0]:
-                                vall = list(x["value"])
-                                break
-                        self.parameters_json["atom"]["data"].append({"key": converted_atom, "value": vall})
-                    else:
-                        self.parameters_json["atom"]["data"].append({"key": converted_atom, "value": [random.random() for _ in range(len(self.atomic_parameters_types))]})
-                    print(colored("    Atom {} was added to parameters.".format(atom), "yellow"))
-                else:
-                    json_parameters_atoms.remove(converted_atom)
-            for atom in json_parameters_atoms:
-                for parameter in self.parameters_json["atom"]["data"]:
-                    if parameter["key"] == atom:
-                        self.parameters_json["atom"]["data"].remove(parameter)
-                print(colored("    Atom {} was deleted from parameters.".format(convert_atom(atom)), "yellow"))
-            if "bond" in self.parameters_json:
-                for bond in set_of_molecules_bonds:
-                    converted_bond = convert_bond(bond)
-                    if converted_bond not in json_parameters_bonds:
-                        if converted_bond[2] == "hbob":
-                            for x in self.parameters_json["bond"]["data"]:
-                                if x["key"][0] == converted_bond[0].split("/")[0] and x["key"][1] == converted_bond[1].split("/")[0] and x["key"][-1] == converted_bond[-1]:
-                                    vall = list(x["value"])
-                                    break
-                            self.parameters_json["bond"]["data"].append({"key": converted_bond, "value": vall})
-                        else:
-                            self.parameters_json["bond"]["data"].append({"key": converted_bond, "value": [random.random()]})
-                        print(colored("     Bond {} was added to parameters.".format(bond), "yellow"))
-                    else:
-                        json_parameters_bonds.remove(converted_bond)
-                for bond in json_parameters_bonds:
-                    for parameter in self.parameters_json["bond"]["data"]:
-                        if parameter["key"] == bond:
-                            self.parameters_json["bond"]["data"].remove(parameter)
-                    print(colored("    Bond {} was deleted from parameters.".format(convert_bond(bond)[5:]), "yellow"))
-        self.parameters = {}
-        if "common" in self.parameters_json:
-            for name, value in zip(self.parameters_json["common"]["names"], self.parameters_json["common"]["values"]):
-                self.parameters[name] = value
-        atomic_types = []
-        for parameter in self.parameters_json["atom"]["data"]:
-            atomic_type = convert_atom(parameter["key"])
-            atomic_types.append(atomic_type)
-            for parameter_name, value in zip(self.atomic_parameters_types, parameter["value"]):
-                self.parameters["{}_{}".format(atomic_type, parameter_name)] = value
-        if "fixed" in self.parameters_json:
-            atomic_types.extend(self.parameters_json["fixed"].keys())
-        self.atomic_types = sorted(atomic_types)
-        if "bond" in self.parameters_json:
-            for parameter in self.parameters_json["bond"]["data"]:
-                self.parameters[convert_bond(parameter["key"])] = parameter["value"][0]
-        self.bond_types = sorted([key for key in self.parameters.keys() if key[:5] == "bond-"])
-        writed_glob_par = -1
-        num_of_atom_par = len(self.atomic_parameters_types) * len(self.atomic_types)
-        parameters_values = [0 for _ in range(len(self.parameters))]
-        if "fixed" in self.parameters_json:
-            parameters_values.extend([0 for x in range(2*len(self.parameters_json["fixed"]))])
-        self.key_index = {}
-        for key, value in self.parameters.items():
-            if key[0].isupper():
-                atomic_type, value_symbol = key.split("_")
-                index = self.atomic_types.index(atomic_type) * len(self.atomic_parameters_types) + self.atomic_parameters_types.index(value_symbol)
-                parameters_values[index] = value
-                self.key_index[key] = index
-            elif key[:5] == "bond-":
-                index = num_of_atom_par + self.bond_types.index(key)
-                parameters_values[index] = value
-                self.key_index[key] = index
-            else:
-                parameters_values[writed_glob_par] = value
-                self.key_index[key] = writed_glob_par
-                writed_glob_par -= 1
+            for atom in missing_atoms:
+                self.parameters["atom"]["data"][atom] = [random.random() for _ in range(len(self.parameters["atom"]["names"]))]
+            if missing_atoms:
+                print(colored(f"    Atom(s) {', '.join(missing_atoms)} was added to parameters.", "yellow"))
+            # unused atoms are atomic types which are in parameters but not in set of molecules
+            unused_atoms = set(self.parameters["atom"]["data"].keys()) - set(set_of_molecules.atomic_types)
+            for atom in unused_atoms:
+                del self.parameters["atom"]["data"][atom]
+            if unused_atoms:
+                print(colored(f"    Atom(s) {', '.join(unused_atoms)} was deleted from parameters.", "yellow"))
+
+            if "bond" in self.parameters:
+                for bond in missing_bonds:
+                    self.parameters["bond"]["data"][bond] = random.random()
+                if missing_bonds:
+                    print(colored(f"    Bonds(s) {', '.join(missing_bonds)} was added to parameters.", "yellow"))
+                # unused bonds are bond types which are in parameters but not in set of molecules
+                unused_bonds = set(self.parameters["bond"]["data"].keys()) - set(set_of_molecules.bond_types)
+                for bond in unused_bonds:
+                    del self.parameters["bond"]["data"][bond]
+                if unused_bonds:
+                    print(colored(f"    Bond(s) {', '.join(unused_bonds)} was deleted from parameters.", "yellow"))
+
+        parameters_values = []
+        for parameter, values in sorted(self.parameters["atom"]["data"].items()):
+            parameters_values.extend(values)
+        if "bond" in self.parameters:
+            for parameter, value in sorted(self.parameters["bond"]["data"].items()):
+                parameters_values.append(value)
+        if "common" in self.parameters:
+            parameters_values.extend(self.parameters["common"].values())
         self.parameters_values = array(parameters_values, dtype=float64)
-        self.bounds = [(min(self.parameters_values), max(self.parameters_values))] * len(self.parameters_values)
+        self.bounds = (min(self.parameters_values), max(self.parameters_values))
         print(colored("ok\n", "green"))
 
     def new_parameters(self, new_parameters):
@@ -180,7 +95,7 @@ class Methods:
             for index, global_parameter in enumerate(self.parameters_json["common"]["names"]):
                 self.parameters_json["common"]["values"][index] = self.parameters[global_parameter]
         for atomic_type in self.parameters_json["atom"]["data"]:
-            for index, parameter in enumerate(self.atomic_parameters_types):
+            for index, parameter in enumerate(self.parameters["atom"]["names"]):
                 atomic_type["value"][index] = self.parameters["{}_{}".format(convert_atom(atomic_type["key"]), parameter)]
         if "bond" in self.parameters_json:
             for bond in self.parameters_json["bond"]["data"]:

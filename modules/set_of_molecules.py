@@ -5,13 +5,21 @@ from sys import exit
 from termcolor import colored
 from scipy.spatial.distance import cdist
 from collections import Counter, defaultdict
-from numpy import array, concatenate, random
+from numpy import array, concatenate, random, sum
 from inspect import stack
 from numpy import float32 as npfloat32
 from numpy import int16 as npint16
 from numba import jitclass
 from numba.typed import List, Dict
 from numba.types import ListType, DictType, float32, int16, int64, string
+
+
+def additional_set_of_molecules_data(molecules):
+    atomic_types = List.empty_list(string)
+    bond_types = List.empty_list(string)
+    [atomic_types.append(atomic_type) for atomic_type in sorted(set([atomic_type for molecule in molecules for atomic_type in molecule.atoms_representation]))]
+    [bond_types.append(bond_type) for bond_type in sorted(set([bond_type for molecule in molecules for bond_type in molecule.bonds_representation]))]
+    return len(molecules), sum([molecule.num_of_atoms for molecule in molecules]), atomic_types, bond_types
 
 
 @jitclass({"molecules": ListType(Molecule.class_type.instance_type),
@@ -26,39 +34,16 @@ from numba.types import ListType, DictType, float32, int16, int64, string
            "ref_atomic_types_charges": DictType(string, float32[:]),
            "all_atoms_id": int16[:],
            "atomic_types": ListType(string),
+           "bond_types": ListType(string),
            "parameters_per_atomic_type": int16})
 class SetOfMolecules:
-    def __init__(self, molecules, file, num_of_molecules, num_of_atoms):
+    def __init__(self, molecules, file, num_of_molecules, num_of_atoms, atomic_types, bond_types):
         self.molecules = molecules
         self.sdf_file = file
         self.num_of_molecules = num_of_molecules
         self.num_of_atoms = num_of_atoms
-
-
-def create_method_data(method, set_of_molecules):
-    set_of_molecules.atomic_types = List.empty_list(string)
-    [set_of_molecules.atomic_types.append(atomic_type) for atomic_type in method.atomic_types]
-
-    try:
-        for molecule in set_of_molecules.molecules:
-            molecule.atoms_id = array([set_of_molecules.atomic_types.index(atomic_type) for atomic_type in molecule.atoms_representation], dtype=npint16) * len(method.atomic_parameters_types)
-            molecule.distance_matrix = cdist(molecule.atomic_coordinates, molecule.atomic_coordinates).astype(npfloat32)
-        if method.bond_types:
-            for molecule in set_of_molecules.molecules:
-                molecule.bonds_id = array([method.bond_types.index("bond-{}".format(bond)) for bond in molecule.bonds_representation], dtype=npint16) + len(method.atomic_parameters_types) * len(method.atomic_types)
-    except ValueError:
-        exit(colored("Error! Subset of molecules used for validation is too small!\n", "red"))
-
-    if stack()[1][0].f_locals["self"].__class__.__name__ == "Parameterization":
-        set_of_molecules.parameters_per_atomic_type = len(method.atomic_parameters_types)
-        set_of_molecules.ref_charges = array([at_chg for molecule in set_of_molecules.molecules for at_chg in molecule.ref_charges], dtype=npfloat32)
-        atomic_types_charges = defaultdict(list)
-        set_of_molecules.all_atoms_id = array([atom_id for molecule in set_of_molecules.molecules for atom_id in molecule.atoms_id], dtype=npint16)
-        for charge, symbol in zip(set_of_molecules.ref_charges, [symbol for molecule in set_of_molecules.molecules for symbol in molecule.atoms_representation]):
-            atomic_types_charges[symbol].append(charge)
-        set_of_molecules.ref_atomic_types_charges = Dict.empty(key_type=string, value_type=float32[:])
-        for atomic_type, value in atomic_types_charges.items():
-            set_of_molecules.ref_atomic_types_charges[atomic_type] = array(value, dtype=npfloat32)
+        self.atomic_types = atomic_types
+        self.bond_types = bond_types
 
 
 def create_set_of_molecules(sdf_file, atomic_types_pattern, num_of_molecules=None):
@@ -84,8 +69,7 @@ def create_set_of_molecules(sdf_file, atomic_types_pattern, num_of_molecules=Non
         else:
             exit(colored(f"Error! {sdf_file} is not valid sdf file.\n", "red"))
 
-    num_of_atoms = sum([molecule.num_of_atoms for molecule in molecules])
-    set_of_molecules = SetOfMolecules(molecules, sdf_file, len(molecules), num_of_atoms)
+    set_of_molecules = SetOfMolecules(molecules, sdf_file, *additional_set_of_molecules_data(molecules))
 
     print(f"    {num_of_molecules} molecules was loaded.")
     print(colored("ok\n", "green"))
@@ -93,28 +77,36 @@ def create_set_of_molecules(sdf_file, atomic_types_pattern, num_of_molecules=Non
     return set_of_molecules
 
 
-def create_parameterization_validation_set(set_of_molecules, random_seed, validation, method):
+def create_method_data(method, set_of_molecules):
+    for molecule in set_of_molecules.molecules:
+        molecule.atoms_id = array([set_of_molecules.atomic_types.index(atomic_type) for atomic_type in molecule.atoms_representation], dtype=npint16) * len(method.parameters["atom"]["names"])
+        molecule.distance_matrix = cdist(molecule.atomic_coordinates, molecule.atomic_coordinates).astype(npfloat32)
+    if "bond" in method.parameters:
+        for molecule in set_of_molecules.molecules:
+            molecule.bonds_id = array([set_of_molecules.bond_types.index(bond) for bond in molecule.bonds_representation], dtype=npint16) + len(method.parameters["atom"]["names"]) * len(set_of_molecules.atomic_types)
+
+    if stack()[1][0].f_locals["self"].__class__.__name__ == "Parameterization":
+        set_of_molecules.parameters_per_atomic_type = len(method.parameters["atom"]["names"])
+        set_of_molecules.ref_charges = array([at_chg for molecule in set_of_molecules.molecules for at_chg in molecule.ref_charges], dtype=npfloat32)
+        atomic_types_charges = defaultdict(list)
+        set_of_molecules.all_atoms_id = array([atom_id for molecule in set_of_molecules.molecules for atom_id in molecule.atoms_id], dtype=npint16)
+        for charge, symbol in zip(set_of_molecules.ref_charges, [symbol for molecule in set_of_molecules.molecules for symbol in molecule.atoms_representation]):
+            atomic_types_charges[symbol].append(charge)
+        set_of_molecules.ref_atomic_types_charges = Dict.empty(key_type=string, value_type=float32[:])
+        for atomic_type, value in atomic_types_charges.items():
+            set_of_molecules.ref_atomic_types_charges[atomic_type] = array(value, dtype=npfloat32)
+
+
+def create_parameterization_validation_set(set_of_molecules, random_seed, parameterization_subset, method):
     print("Creating validation and parameterization sets...")
     random.seed(random_seed)
-    if validation == 100:
-        set_of_molecules_parameterization = create_subset_of_molecules(set_of_molecules, method, 10)
-        if len(set_of_molecules_parameterization.molecules) == len(set_of_molecules.molecules):
-            exit(colored("Error! It is too small set of molecules.\n", "red"))
-        parameterization_molecules_names = [molecule.name for molecule in set_of_molecules_parameterization.molecules]
-        molecules_validation = List()
-        [molecules_validation.append(molecule) for molecule in set_of_molecules.molecules if molecule.name not in parameterization_molecules_names]
-    else:
-        randomized_molecules = List()
-        [randomized_molecules.append(molecule) for molecule in random.permutation(set_of_molecules.molecules)]
-        num_of_molecules_par_val = int((1 - validation / 100) * (set_of_molecules.num_of_molecules))
-        if num_of_molecules_par_val == 0:
-            num_of_molecules_par_val = 1
-        molecules_parameterization = randomized_molecules[:num_of_molecules_par_val]
-        num_of_atoms_parameterization = sum([molecule.num_of_atoms for molecule in molecules_parameterization])
-        set_of_molecules_parameterization = SetOfMolecules(molecules_parameterization, set_of_molecules.sdf_file, len(molecules_parameterization), num_of_atoms_parameterization)
-        molecules_validation = randomized_molecules[num_of_molecules_par_val:]
-    num_of_atoms_validation = sum([molecule.num_of_atoms for molecule in molecules_validation])
-    set_of_molecules_validation = SetOfMolecules(molecules_validation, set_of_molecules.sdf_file, len(molecules_validation), num_of_atoms_validation)
+    set_of_molecules_parameterization = create_subset_of_molecules(set_of_molecules, method, parameterization_subset)
+    if len(set_of_molecules_parameterization.molecules) == len(set_of_molecules.molecules):
+        exit(colored("Error! It is too small set of molecules or too high parameterization_subset value.\n", "red"))
+    parameterization_molecules_names = [molecule.name for molecule in set_of_molecules_parameterization.molecules]
+    molecules_validation = List()
+    [molecules_validation.append(molecule) for molecule in set_of_molecules.molecules if molecule.name not in parameterization_molecules_names]
+    set_of_molecules_validation = SetOfMolecules(molecules_validation, set_of_molecules.sdf_file, *additional_set_of_molecules_data(molecules_validation))
     print(f"    {set_of_molecules_parameterization.num_of_molecules} molecules in parameterization set.")
     print(f"    {set_of_molecules_validation.num_of_molecules} molecules in validation set.")
     print(colored("ok\n", "green"))
@@ -136,10 +128,9 @@ def create_subset_of_molecules(original_set_of_molecules, method, subset):
                 break
         return molecules
 
-    atomic_types = set([atomic_symbol for molecule in original_set_of_molecules.molecules for atomic_symbol in molecule.atoms_representation])
-    molecules = _select_molecules(random.permutation(original_set_of_molecules.molecules), subset, atomic_types)
-    molecules = _select_molecules(molecules[::-1], subset, atomic_types)
-    if method == "ACKS2":
+    molecules = _select_molecules(random.permutation(original_set_of_molecules.molecules), subset, original_set_of_molecules.atomic_types)
+    molecules = _select_molecules(molecules[::-1], subset, original_set_of_molecules.atomic_types)
+    if method ==  "ACKS2":
         # add such molecules to subset of molecules to contain all bond types
         bond_types = set([bond for molecule in original_set_of_molecules.molecules for bond in molecule.bonds_representation])
         counter_bonds = Counter()
@@ -159,7 +150,7 @@ def create_subset_of_molecules(original_set_of_molecules, method, subset):
 
     numba_molecules = List()
     [numba_molecules.append(molecule) for molecule in molecules]
-    subset_of_molecules = SetOfMolecules(numba_molecules, original_set_of_molecules.sdf_file, len(molecules), sum([molecule.num_of_atoms for molecule in molecules]))
+    subset_of_molecules = SetOfMolecules(numba_molecules, original_set_of_molecules.sdf_file, *additional_set_of_molecules_data(numba_molecules))
     return subset_of_molecules
 
 def create_set_of_molecules_from_chg_files(ref_chg_file, emp_chg_file):
@@ -169,7 +160,6 @@ def create_set_of_molecules_from_chg_files(ref_chg_file, emp_chg_file):
     molecules = List()
     all_ref_charges = []
     all_emp_charges = []
-    num_of_atoms = 0
     with open(ref_chg_file, "r") as ref_chg_file, open(emp_chg_file, "r") as emp_chg_file:
         ref_molecules_data = [[line.split() for line in molecule.splitlines()]
                           for molecule in ref_chg_file.read().split("\n\n")[:-1]]
@@ -190,14 +180,13 @@ def create_set_of_molecules_from_chg_files(ref_chg_file, emp_chg_file):
             for symbol, ref_charge, emp_charge in zip(atomic_symbols, ref_charges, emp_charges):
                 ref_atomic_types_charges[symbol].append(ref_charge)
                 emp_atomic_types_charges[symbol].append(emp_charge)
-            num_of_atoms += len(atomic_symbols)
     ref_atomic_types_charges_numba = Dict.empty(key_type=string, value_type=float32[:])
     emp_atomic_types_charges_numba = Dict.empty(key_type=string, value_type=float32[:])
     for (symbol, ref_charges), (_, emp_charges) in zip(sorted(ref_atomic_types_charges.items()), sorted(emp_atomic_types_charges.items())):
         ref_atomic_types_charges_numba[symbol] = array(ref_charges, dtype=npfloat32)
         emp_atomic_types_charges_numba[symbol] = array(emp_charges, dtype=npfloat32)
     print(colored("ok\n", "green"))
-    set_of_molecules = SetOfMolecules(molecules, "", len(molecules), num_of_atoms)
+    set_of_molecules = SetOfMolecules(molecules, "", *additional_set_of_molecules_data(molecules))
     set_of_molecules.ref_chg_file = ref_chg_file.name
     set_of_molecules.emp_chg_file = emp_chg_file.name
     set_of_molecules.ref_atomic_types_charges = ref_atomic_types_charges_numba

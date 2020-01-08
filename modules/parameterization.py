@@ -88,7 +88,7 @@ def calculate_charges_and_statistical_data(list_of_parameters, method, set_of_mo
 
 
 class Parameterization:
-    def __init__(self, sdf_file, ref_chg_file, parameters, method, optimization_method, minimization_method, atomic_types_pattern, num_of_molecules, num_of_samples, num_of_candidates, subset_heuristic, validation, cpu, data_dir, rewriting_with_force, seed, git_hash=None):
+    def __init__(self, sdf_file, ref_chg_file, parameters, method, optimization_method, minimization_method, atomic_types_pattern, num_of_molecules, num_of_samples, num_of_candidates, subset_heuristic, parameterization_subset, cpu, data_dir, rewriting_with_force, seed, git_hash=None):
         start_time = date.now()
         files = [(sdf_file, True, "file"),
                  (ref_chg_file, True, "file"),
@@ -100,7 +100,7 @@ class Parameterization:
 
         set_of_molecules = create_set_of_molecules(sdf_file, atomic_types_pattern, num_of_molecules=num_of_molecules)
         add_charges_to_set_of_molecules(set_of_molecules, ref_chg_file)
-        set_of_molecules_parameterization, set_of_molecules_validation = create_parameterization_validation_set(set_of_molecules, seed, validation, method)
+        set_of_molecules_parameterization, set_of_molecules_validation = create_parameterization_validation_set(set_of_molecules, seed, parameterization_subset, method)
         method = getattr(import_module("modules.methods"), method)()
         method.load_parameters(parameters, set_of_molecules_parameterization, "parameterization", atomic_types_pattern=atomic_types_pattern)
 
