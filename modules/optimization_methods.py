@@ -8,6 +8,7 @@ from operator import itemgetter
 
 
 def local_minimization(input_parameters, objective_function, minimization_method, charge_method, set_of_molecules):
+    return input_parameters
     if str(charge_method) in ["SFKEEM", "QEq", "MGC"]:
         bounds = [[0.000001, 100000] for _ in range(len(input_parameters))]
     else:

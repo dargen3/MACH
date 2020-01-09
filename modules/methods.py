@@ -80,26 +80,32 @@ class Methods:
             for parameter, value in sorted(self.parameters["bond"]["data"].items()):
                 parameters_values.append(value)
         if "common" in self.parameters:
-            parameters_values.extend(self.parameters["common"].values())
+            parameters_values.extend(sorted(self.parameters["common"].values()))
         self.parameters_values = array(parameters_values, dtype=float64)
         self.bounds = (min(self.parameters_values), max(self.parameters_values))
         print(colored("ok\n", "green"))
 
     def new_parameters(self, new_parameters):
         self.parameters_values = new_parameters
-        parameters = {}
-        for key in self.parameters.keys():
-            parameters[key] = self.parameters_values[self.key_index[key]]
-        self.parameters = parameters
-        if "common" in self.parameters_json:
-            for index, global_parameter in enumerate(self.parameters_json["common"]["names"]):
-                self.parameters_json["common"]["values"][index] = self.parameters[global_parameter]
-        for atomic_type in self.parameters_json["atom"]["data"]:
-            for index, parameter in enumerate(self.parameters["atom"]["names"]):
-                atomic_type["value"][index] = self.parameters["{}_{}".format(convert_atom(atomic_type["key"]), parameter)]
-        if "bond" in self.parameters_json:
-            for bond in self.parameters_json["bond"]["data"]:
-                bond["value"][0] = self.parameters[convert_bond(bond["key"])]
+        parameters_per_atom = len(self.parameters["atoms"]["names"])
+        index = 0
+        for key in sorted(self.parameters["atom"]["data"].keys()):
+            self.parameters["atom"]["data"][key] = self.parameters_values[index: index + parameters_per_atom]
+            index = index + parameters_per_atom
+
+        if "bond" in self.parameters:
+            index += 1
+            for key in sorted(self.parameters["bond"]["data"].keys()):
+                self.parameters["bond"]["data"][key] = self.parameters_values[index]
+                index += 1
+
+        if "common" in self.parameters:
+            for key in sorted(self.parameters["common"]):
+                self.parameters["common"][key] = self.parameters_values[index]
+                index += 1
+
+
+
 
 
 @jit(nopython=True, cache=True)
