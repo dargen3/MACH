@@ -4,6 +4,7 @@ from numpy import float32, linspace, zeros, random, arange
 
 @jit(nopython=True, cache=True)
 def lhs(dimensionality, samples, high_bound, low_bound):
+    """ Latin hypercube sampling """
     cut = linspace(0, 1, samples + 1).astype(float32)
     u = zeros((samples, dimensionality), dtype=float32)
     for x in range(samples):

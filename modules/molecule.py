@@ -1,6 +1,6 @@
 from numba import jitclass
-from numba.types import string, uint32, float32, uint16, ListType
 from numba.typed import List
+from numba.types import string, uint32, float32, uint16, ListType
 from numpy import empty, float32 as npfloat32, int32 as npint32
 
 
@@ -32,4 +32,3 @@ def create_molecule_from_charges(name, atoms_representation, ref_charges, emp_ch
     chg_molecule.ref_charges = ref_charges
     chg_molecule.emp_charges = emp_charges
     return chg_molecule
-

@@ -1,4 +1,5 @@
 #!/bin/bash
+
 PARA=$(basename "$1")
 SDF=$(basename "$2")
 CHG=$(basename "$3")

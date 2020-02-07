@@ -1,23 +1,24 @@
-from .set_of_molecules import create_subset_of_molecules
-from .lhs import lhs
-from scipy.optimize import minimize
-from heapq import nsmallest
 from functools import partial
+from heapq import nsmallest
 from multiprocessing import Pool
 from operator import itemgetter
 
+from scipy.optimize import minimize
+
+from .lhs import lhs
+from .set_of_molecules import create_subset_of_molecules
+
 
 def local_minimization(input_parameters, objective_function, minimization_method, charge_method, set_of_molecules):
-    return input_parameters
     if str(charge_method) in ["SFKEEM", "QEq", "MGC"]:
         bounds = [[0.000001, 100000] for _ in range(len(input_parameters))]
     else:
         bounds = [[-100000, 100000] for _ in range(len(input_parameters))]
-
     res = minimize(objective_function, input_parameters, method=minimization_method,
                    options={"maxiter": 10000}, bounds=bounds,
                    args=(charge_method, set_of_molecules))
     return res.x
+
 
 def modify_num_of_samples(num_of_samples, cpu):
     num_of_samples_cpu = num_of_samples / cpu

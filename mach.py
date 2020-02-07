@@ -61,6 +61,7 @@ if __name__ == '__main__':
                          args.data_dir,
                          args.rewriting_with_force,
                          args.random_seed,
+                         args.convert_parameters,
                          args.git_hash)
 
     elif args.mode == "comparison":
@@ -94,7 +95,8 @@ if __name__ == '__main__':
                               args.cpu,
                               args.RAM,
                               args.walltime,
-                              args.random_seed)
+                              args.random_seed,
+                              args.convert_parameters)
 
     elif args.mode == "clusterization":
         clusterize(args.ref_chg_file, args.sdf_file, args.atomic_types_pattern)

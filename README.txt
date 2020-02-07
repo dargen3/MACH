@@ -1,9 +1,23 @@
-12 5 47 
-11 3 20
-10 2 28
-9  1 37
-8    56
-7    32
-6    23
-5    15
-4    11
+refactoring
+předělání komplet na numbu
+dodání interaktivity inspekt do comparison
+nové atomové typy (nemá moc cenu...), má cenu omezení bonds
+
+
+
+refactored - všechno kromě calculation cutoff a clusterization
+
+publikace do META
+
+
+todo:
+
+nerozlišovat calculation a calculation_cutoff  
+
+načítání nábojů
+
+přepsat command pro local minimization při send meta
+
+clusterization, - rychleji
+                           - tlačítko na vypsání všech atomů
+

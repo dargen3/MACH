@@ -1,9 +1,9 @@
-from .molecule import Molecule
+from numba.typed import List
 from numpy import array, int32, float32
 from termcolor import colored
-from numba.typed import List
-from .control_order_of_molecules import control_order_of_molecules
 
+from .control_order_of_molecules import control_order_of_molecules
+from .molecule import Molecule
 
 
 def add_charges_to_set_of_molecules(set_of_molecules, ref_chg_file):
@@ -58,21 +58,33 @@ def _create_atoms_bonds_representation(num_of_atoms, atomic_symbols, bonds, atom
         [atoms_representation.append(atom) for atom in atomic_symbols]
     elif atomic_types_pattern == "hbo":
         [atoms_representation.append(atom) for atom in _create_atom_highest_bond(num_of_atoms, bonds, atomic_symbols)]
-    elif atomic_types_pattern == "hbob":
+    elif atomic_types_pattern in ["hbob", "hbob_sb"]:
         bonded_atoms = [[] for _ in range(num_of_atoms)]
         for ba1, ba2, _ in bonds:
-
             bonded_atoms[ba1].append(atomic_symbols[ba2])
             bonded_atoms[ba2].append(atomic_symbols[ba1])
         [atoms_representation.append("{}/{}".format(hbo, "".join(sorted(bonded_atoms)))) for hbo, bonded_atoms in zip(_create_atom_highest_bond(num_of_atoms, bonds, atomic_symbols), bonded_atoms)]
+    elif atomic_types_pattern in ["hbobhbo"]:
+        bonded_atoms = [[] for _ in range(num_of_atoms)]
+        hbo = _create_atom_highest_bond(num_of_atoms, bonds, atomic_symbols)
+        hbo_without_spec = [atom.replace("~", "") for atom in hbo]
+
+        for ba1, ba2, _ in bonds:
+            bonded_atoms[ba1].append(hbo_without_spec[ba2])
+            bonded_atoms[ba2].append(hbo_without_spec[ba1])
+
+        [atoms_representation.append("{}/{}".format(hbo, "".join(sorted(bonded_atoms)))) for hbo, bonded_atoms in zip(hbo, bonded_atoms)]
 
     # create bonds_representation (one great string)
     # plain (plain atom) = "C_H;C_N;..."
     # hbo (highest bond order) = "C~1_H~1;C~2_N~2;..."
     # hbob (highest bond order and bonded atoms) = "C~1/HHH_H~1/C;C~2/CHH_N~2/CH;..."
     bonds_representation = List()
-    if atomic_types_pattern in ["hbo", "hbob"]:
+    if atomic_types_pattern in ["hbo", "hbob", "hbobhbo"]:
         [bonds_representation.append("{}-{}".format("-".join(sorted([atoms_representation[ba1], atoms_representation[ba2]])), type)) for ba1, ba2, type in bonds]
+    elif atomic_types_pattern == "hbob_sb":
+        hbo = _create_atom_highest_bond(num_of_atoms, bonds, atomic_symbols)
+        [bonds_representation.append("{}-{}".format("-".join(sorted([hbo[ba1], hbo[ba2]])), type)) for ba1, ba2, type in bonds]
     else:
         [bonds_representation.append("-".join(sorted([atoms_representation[ba1], atoms_representation[ba2]]))) for ba1, ba2, _ in bonds]
     return atoms_representation, bonds_representation

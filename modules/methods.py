@@ -1,26 +1,25 @@
+from json import load
+from math import erf
 from sys import exit
-from termcolor import colored
+
 from numba import jit
 from numpy import float64, empty, array, zeros, sqrt, sum, random
 from numpy.linalg import solve
-from math import erf
-from json import load
-from .convert_parameters import convert_parameters_schindler
+from termcolor import colored
+
+from .convert_parameters import convert_parameters_schindler, convert_hbo_hbob, convert_hbo_hbob_sb, convert_hbo_hbobhbo
 
 
 class Methods:
     def __repr__(self):
         return self.__class__.__name__
 
-    def load_parameters(self, parameters_file, set_of_molecules, mode, atomic_types_pattern):
+    def load_parameters(self, parameters_file, set_of_molecules, mode, atomic_types_pattern, convert_parameters):
         if not parameters_file:
             parameters_file = "modules/parameters/{}.json".format(str(self))
 
         print(f"Loading of parameters from {parameters_file}...")
-        try:
-            self.parameters = load(open(parameters_file))
-        except FileNotFoundError:
-            exit(colored(f"Error! There is no file {parameters_file}.", "red"))
+        self.parameters = load(open(parameters_file))
 
         method_in_parameters_file = self.parameters["metadata"]["method"]
         if self.__class__.__name__ != method_in_parameters_file:
@@ -29,13 +28,22 @@ class Methods:
         if isinstance(self.parameters["atom"]["data"], list):
             self.parameters = convert_parameters_schindler(self.parameters)
 
+        set_of_molecules_atomic_types = set([atom for molecule in set_of_molecules.molecules for atom in molecule.atoms_representation])
+        if "bond" in self.parameters:
+            set_of_molecules_bonds_types = set([bond for molecule in set_of_molecules.molecules for bond in molecule.bonds_representation])
+
+        if convert_parameters:
+            if self.parameters["metadata"]["atomic_types_pattern"] != "hbo":
+                exit(colored(f"Error! Only hbo parameters can by used for --convert_parameters option!\n", "red"))
+            self.parameters = globals()[f"convert_hbo_{atomic_types_pattern}"](self.parameters, set_of_molecules_atomic_types, set_of_molecules_bonds_types)
+
         if self.parameters["metadata"]["atomic_types_pattern"] != atomic_types_pattern:
             exit(colored(f"Error! These parameters are for atomic types pattern {self.parameters['metadata']['atomic_types_pattern']}, but you selected by argument atomic types pattern {atomic_types_pattern}!\n", "red"))
 
         # missing atoms and missing bond are atomic types and bond types which are in set of molecules but not in parameters
-        missing_atoms = set(set_of_molecules.atomic_types) - set(self.parameters["atom"]["data"].keys())
+        missing_atoms = set_of_molecules_atomic_types - set(self.parameters["atom"]["data"].keys())
         if "bond" in self.parameters:
-            missing_bonds = set(set_of_molecules.bond_types) - set(self.parameters["bond"]["data"].keys())
+            missing_bonds = set_of_molecules_bonds_types - set(self.parameters["bond"]["data"].keys())
 
         if mode == "calculation":
             exit_status = False
@@ -55,7 +63,7 @@ class Methods:
             if missing_atoms:
                 print(colored(f"    Atom(s) {', '.join(missing_atoms)} was added to parameters.", "yellow"))
             # unused atoms are atomic types which are in parameters but not in set of molecules
-            unused_atoms = set(self.parameters["atom"]["data"].keys()) - set(set_of_molecules.atomic_types)
+            unused_atoms = set(self.parameters["atom"]["data"].keys()) - set_of_molecules_atomic_types
             for atom in unused_atoms:
                 del self.parameters["atom"]["data"][atom]
             if unused_atoms:
@@ -67,12 +75,14 @@ class Methods:
                 if missing_bonds:
                     print(colored(f"    Bonds(s) {', '.join(missing_bonds)} was added to parameters.", "yellow"))
                 # unused bonds are bond types which are in parameters but not in set of molecules
-                unused_bonds = set(self.parameters["bond"]["data"].keys()) - set(set_of_molecules.bond_types)
+                unused_bonds = set(self.parameters["bond"]["data"].keys()) - set_of_molecules_bonds_types
                 for bond in unused_bonds:
                     del self.parameters["bond"]["data"][bond]
                 if unused_bonds:
                     print(colored(f"    Bond(s) {', '.join(unused_bonds)} was deleted from parameters.", "yellow"))
 
+        self.atomic_types = sorted(self.parameters["atom"]["data"].keys())
+        self.bond_types = sorted(self.parameters["bond"]["data"].keys())
         parameters_values = []
         for parameter, values in sorted(self.parameters["atom"]["data"].items()):
             parameters_values.extend(values)
@@ -87,15 +97,14 @@ class Methods:
 
     def new_parameters(self, new_parameters):
         self.parameters_values = new_parameters
-        parameters_per_atom = len(self.parameters["atoms"]["names"])
+        parameters_per_atom = len(self.parameters["atom"]["names"])
         index = 0
-        for key in sorted(self.parameters["atom"]["data"].keys()):
-            self.parameters["atom"]["data"][key] = self.parameters_values[index: index + parameters_per_atom]
+        for key in self.atomic_types:
+            self.parameters["atom"]["data"][key] = list(self.parameters_values[index: index + parameters_per_atom])
             index = index + parameters_per_atom
 
         if "bond" in self.parameters:
-            index += 1
-            for key in sorted(self.parameters["bond"]["data"].keys()):
+            for key in self.bond_types:
                 self.parameters["bond"]["data"][key] = self.parameters_values[index]
                 index += 1
 
@@ -103,9 +112,6 @@ class Methods:
             for key in sorted(self.parameters["common"]):
                 self.parameters["common"][key] = self.parameters_values[index]
                 index += 1
-
-
-
 
 
 @jit(nopython=True, cache=True)
@@ -156,7 +162,7 @@ def qeq_calculate(set_of_molecules, parameters):
             matrix[i][i] = parameters[parameter_index + 1]
             vector[i] = -parameters[parameter_index]
             rad1 = vector_rad[i]
-            for j, (rad2, distance) in enumerate(zip(vector_rad[i + 1:], distance_matrix[i, i+1:]),i + 1):
+            for j, (rad2, distance) in enumerate(zip(vector_rad[i + 1:], distance_matrix[i, i + 1:]), i + 1):
                 matrix[i][j] = matrix[j][i] = erf(sqrt(rad1 * rad2 / (rad1 + rad2)) * distance) / distance
         vector[-1] = 0  # formal charge
         results[index: new_index] = solve(matrix, vector)[:-1]
@@ -170,11 +176,11 @@ class QEq(Methods):
 
 
 @jit(nopython=True, cache=True, fastmath=True)
-def acks2_calculate(set_of_molecules, parameters):
-    multiplied_widths = empty((len(set_of_molecules.atomic_types)*4, len(set_of_molecules.atomic_types)*4), dtype=float64)
-    for x in range(len(set_of_molecules.atomic_types)):
-        for y in range(len(set_of_molecules.atomic_types)):
-            multiplied_widths[x*4][y*4] = sqrt(2 * parameters[x*4 + 2] ** 2 + 2 * parameters[y*4 + 2] ** 2)
+def acks2_calculate(set_of_molecules, parameters, num_of_atomic_types):
+    multiplied_widths = empty((num_of_atomic_types * 4, num_of_atomic_types * 4), dtype=float64)
+    for x in range(num_of_atomic_types):
+        for y in range(num_of_atomic_types):
+            multiplied_widths[x * 4][y * 4] = sqrt(2 * parameters[x * 4 + 2] ** 2 + 2 * parameters[y * 4 + 2] ** 2)
 
     results = empty(set_of_molecules.num_of_atoms, dtype=float64)
     index = 0
@@ -196,7 +202,7 @@ def acks2_calculate(set_of_molecules, parameters):
             for j, parameter_index_2 in enumerate(molecule.atoms_id[cc + 1:], cc + 1):
                 d = distance_matrix[cc][j]
                 d0 = multiplied_widths[parameter_index][parameter_index_2]
-                matrix[cc, j] = matrix[j, cc] = erf(d/d0)/d
+                matrix[cc, j] = matrix[j, cc] = erf(d / d0) / d
         vector[:num_of_atoms] += list_of_eta * list_of_q0
         matrix[num_of_atoms, :num_of_atoms] = 1
         matrix[:num_of_atoms, num_of_atoms] = 1
@@ -207,6 +213,7 @@ def acks2_calculate(set_of_molecules, parameters):
         for p in range(num_of_atoms):
             matrix[p, num_of_atoms + 1 + p] = 1.0
             matrix[num_of_atoms + 1 + p, p] = 1.0
+
         for b_index, bond_id in enumerate(molecule.bonds_id):
             bond = bonds[b_index]
             i = num_of_atoms + 1 + bond[0]
@@ -223,4 +230,4 @@ def acks2_calculate(set_of_molecules, parameters):
 
 class ACKS2(Methods):
     def calculate(self, set_of_molecules):
-        self.results = acks2_calculate(set_of_molecules, self.parameters_values)
+        self.results = acks2_calculate(set_of_molecules, self.parameters_values, len(self.atomic_types))

@@ -1,6 +1,7 @@
 from os import path, remove
 from shutil import rmtree
 from sys import exit
+
 from termcolor import colored
 
 
