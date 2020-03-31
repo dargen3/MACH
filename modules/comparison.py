@@ -45,7 +45,7 @@ class Comparison:
                                rewriting_with_force)
         mkdir(self.data_dir)
         self.set_of_molecules = create_set_of_molecules_from_chg_files(ref_chg_file, emp_chg_file)
-        self.atomic_types = set([atom for molecule in self.set_of_molecules for atom in molecule.atoms_representation])
+        self.atomic_types = set([atom for molecule in self.set_of_molecules.molecules for atom in molecule.atoms_representation])
         self.statistics_comparison()
         self.graphs()
         self.write_html_comparison()
@@ -172,7 +172,8 @@ class Comparison:
         plot_width = 944
         rmsd_pearson_labels_x = [577, 630]
         par_val_comparison_width = 994
-        if "/" not in self.atomic_types[0]:
+        print(self.atomic_types)
+        if "/" not in list(self.atomic_types)[0]:
             label_width = 50
         else:
             label_width = 130

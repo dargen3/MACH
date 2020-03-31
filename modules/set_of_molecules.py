@@ -12,7 +12,7 @@ from scipy.spatial.distance import cdist
 from termcolor import colored
 
 from .control_order_of_molecules import control_order_of_molecules
-from .input_output import load_sdf_v2000, load_sdf_v3000
+from .input_output import load_sdf
 from .molecule import Molecule, create_molecule_from_charges
 
 
@@ -36,32 +36,16 @@ class SetOfMolecules:
         self.num_of_atoms = num_of_atoms
 
 
-def create_set_of_molecules(sdf_file, atomic_types_pattern, num_of_molecules=None):
+def create_set_of_molecules(sdf_file, atomic_types_pattern):
     print(f"Loading of set of molecules from {sdf_file}...")
-    molecules = List()
     molecules_data = open(sdf_file, "r").read()
-    molecules_in_file = molecules_data.count("$$$$")
 
-    num_of_molecules = num_of_molecules if num_of_molecules else molecules_in_file
-    if num_of_molecules > molecules_data.count("$$$$"):
-        exit(colored(f"Error! There is only {molecules_in_file} molecules in {sdf_file}.", "red"))
-
-    if molecules_data[-5:].strip() != "$$$$":
-        exit(colored(f"Error! {sdf_file} is not valid sdf file. Last line does not contain $$$$.\n", "red"))
-
-    molecules_data = [x.splitlines() for x in molecules_data.split("$$$$\n")][:num_of_molecules]
+    molecules_data = [x.splitlines() for x in molecules_data.split("$$$$\n")][:-1]
+    molecules = List()
     for molecule_data in molecules_data:
-        type_of_sdf_record = molecule_data[3][-5:]
-        if type_of_sdf_record == "V2000":
-            molecules.append(load_sdf_v2000(molecule_data, atomic_types_pattern))
-        elif type_of_sdf_record == "V3000":
-            molecules.append(load_sdf_v3000(molecule_data, atomic_types_pattern))
-        else:
-            exit(colored(f"Error! {sdf_file} is not valid sdf file.\n", "red"))
-
+        molecules.append(load_sdf(molecule_data, atomic_types_pattern, molecule_data[3][-5:]))
     set_of_molecules = SetOfMolecules(molecules, sdf_file, len(molecules), sum([molecule.num_of_atoms for molecule in molecules]))
-
-    print(f"    {num_of_molecules} molecules was loaded.")
+    print(f"    {set_of_molecules.num_of_molecules} molecules was loaded.")
     print(colored("ok\n", "green"))
 
     return set_of_molecules

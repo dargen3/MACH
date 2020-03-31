@@ -36,16 +36,13 @@ def load_arguments():
                           help="For internal usage only.")
     optional.add_argument("--method",
                           help="Empirical method for calculation or parameterization partial atomic charges.",
-                          choices=("EEM", "SFKEEM", "QEq", "PEOE", "MGC", "ACKS2", "COMBA", "DENR"))
+                          choices=("EEM", "QEq", "SQE", "EQEq", "EQEqc"))
     optional.add_argument("--minimization_method",
                           help="Minimization method for parameterization.",
                           default="SLSQP")
     optional.add_argument("--num_of_candidates",
                           help="Use for \"guided minimization\" optimization method only. Define number of used candidates.",
                           default=30,
-                          type=int)
-    optional.add_argument("--num_of_molecules",
-                          help="Number of molecules loaded.",
                           type=int)
     optional.add_argument("--num_of_samples",
                           help="Use for \"guided minimization\" optimization method only. Define number of used initial samples.",
@@ -73,10 +70,6 @@ def load_arguments():
                           help="File with reference charges.")
     optional.add_argument("--sdf_file",
                           help="Sdf file with molecules.")
-    optional.add_argument("--subset_heuristic",
-                          help="Use for \"guided minimization\" optimization method only. Minimal subset of molecules that contains n atoms of each atom type is used for first step of \"guided minimization\". If 0 is set, full set of molecules is used. Less value than 5 is not recommended.",
-                          default=5,
-                          type=int)
     optional.add_argument("--walltime",
                           help="Use for parameterization_meta and calculation_meta modes only. Define maximum time for META job in hours.",
                           default=10,
@@ -118,11 +111,6 @@ def load_arguments():
         if args.ref_chg_file is None or args.sdf_file is None:
             parser.error("For clusterization mode choose --ref_chg_file and --sdf_file.")
 
-    if args.mode in ["parameterization", "parameterization_meta"] and type(args.num_of_molecules) == int and args.num_of_molecules < 2:
-        parser.error("Error! There must be more then 1 molecule for parameterization!")
-
-    if args.subset_heuristic < 1:
-        parser.error("Error! subset_of_heuristic value must be higher then 0!")
 
     if args.parameterization_subset < 1:
         parser.error("Error! parameterization_subset value must be higher then 0!")

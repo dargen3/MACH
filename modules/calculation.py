@@ -16,8 +16,10 @@ class Calculation:
                                rewriting_with_force)
         method = getattr(import_module("modules.methods"), method)()
         set_of_molecules = create_set_of_molecules(sdf, atomic_types_pattern)
-        method.load_parameters(parameters, set_of_molecules, "calculation", atomic_types_pattern)
+        method.load_parameters(parameters, set_of_molecules, "calculation", atomic_types_pattern, None)
+        print("Preprocessing data...")
         create_method_data(method, set_of_molecules)
+        print(colored("ok\n", "green"))
         print("Calculation of charges... ")
         try:
             method.calculate(set_of_molecules)

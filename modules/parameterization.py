@@ -5,13 +5,14 @@ from itertools import chain
 from json import dumps
 from os import path, mkdir
 from shutil import copyfile
-from sys import exit, argv
+from sys import exit, argv, stdout
 
 import git
 from numba import jit
 from numba.typed import Dict
 from numba.types import float32, int16, string
-from numpy import sum, sqrt, abs, max, linalg, array, mean, empty, isnan, float32 as npfloat32
+from numpy import sum, sqrt, abs, max, array, mean, empty, isnan, float32 as npfloat32
+from numpy.linalg import LinAlgError
 from termcolor import colored
 
 from .comparison import Comparison
@@ -21,25 +22,16 @@ from .optimization_methods import local_minimization, guided_minimization
 from .set_of_molecules import create_set_of_molecules, create_method_data, create_parameterization_validation_set
 
 
-def write_parameters_to_file(parameters_file, method, set_of_molecules_file, optimization_method, minimization_method, start_time, num_of_samples, num_of_candidates, cpu, git_hash, subset_heuristic):
+def write_parameters_to_file(parameters_file, parameters, start_time, git_hash):
     print("Writing parameters to {}...".format(parameters_file))
     if not git_hash:
         git_hash = git.Repo(search_parent_directories=True).head.object.hexsha
-    summary_lines = ["Set of molecules: {}".format(set_of_molecules_file),
-                     "Method: {}".format(method),
-                     "Optimization method: {}".format(optimization_method),
-                     "Minimization method: {}".format(minimization_method),
-                     "Date of parameterization: {}".format(start_time.strftime("%Y-%m-%d %H:%M")),
+    summary_lines = ["Date of parameterization: {}".format(start_time.strftime("%Y-%m-%d %H:%M")),
                      "Time: {}\n\n".format(str(date.now() - start_time)[:-7]),
-                     "Number of cpu: {}".format(cpu),
                      "Type of cpu: {}".format([x.strip().split(":")[1] for x in open("/proc/cpuinfo").readlines() if "model name" in x][0]),
                      "Command: {}".format(" ".join(argv)),
                      "Github commit hash: <a href = \"{}\">{}</a></div>".format("https://github.com/dargen3/MACH/commit/{}".format(git_hash), git_hash)]
-    if optimization_method == "guided_minimization":
-        summary_lines.insert(3, "Number of samples: {}".format(num_of_samples))
-        summary_lines.insert(3, "Number of candidates: {}".format(num_of_candidates))
-        summary_lines.insert(3, "Subset heuristic: {}".format(subset_heuristic))
-    parameters_json = dumps(method.parameters, indent=2, sort_keys=True)
+    parameters_json = dumps(parameters, indent=2, sort_keys=True)
     with open(parameters_file, "w") as par_file:
         par_file.write(parameters_json)
     print(colored("ok\n", "green"))
@@ -78,7 +70,7 @@ def calculate_charges_and_statistical_data(list_of_parameters, method, set_of_mo
     method.parameters_values = list_of_parameters
     try:
         method.calculate(set_of_molecules)
-    except (linalg.linalg.LinAlgError, ZeroDivisionError):
+    except (LinAlgError, ZeroDivisionError):
         return 1000
     results = method.results
     atomic_types_rmsd, rmsd = rmsd_calculation(set_of_molecules, results, method.atomic_types)
@@ -90,7 +82,7 @@ def calculate_charges_and_statistical_data(list_of_parameters, method, set_of_mo
 
 
 class Parameterization:
-    def __init__(self, sdf_file, ref_chg_file, parameters, method, optimization_method, minimization_method, atomic_types_pattern, num_of_molecules, num_of_samples, num_of_candidates, subset_heuristic, parameterization_subset, cpu, data_dir, rewriting_with_force, seed, convert_parameters, git_hash=None):
+    def __init__(self, sdf_file, ref_chg_file, parameters, method, optimization_method, minimization_method, atomic_types_pattern, num_of_samples, num_of_candidates, parameterization_subset, cpu, data_dir, rewriting_with_force, seed, convert_parameters, git_hash=None):
         start_time = date.now()
         files = [(sdf_file, True, "file"),
                  (ref_chg_file, True, "file"),
@@ -100,7 +92,7 @@ class Parameterization:
         control_existing_files(files,
                                rewriting_with_force)
 
-        set_of_molecules = create_set_of_molecules(sdf_file, atomic_types_pattern, num_of_molecules=num_of_molecules)
+        set_of_molecules = create_set_of_molecules(sdf_file, atomic_types_pattern)
         add_charges_to_set_of_molecules(set_of_molecules, ref_chg_file)
         method = getattr(import_module("modules.methods"), method)()
         method.load_parameters(parameters, set_of_molecules, "parameterization", atomic_types_pattern, convert_parameters)
@@ -113,9 +105,13 @@ class Parameterization:
 
         print(f"Parameterizating by {' '.join(optimization_method.split('_'))}...")
         if optimization_method == "local_minimization":
-            final_parameters = local_minimization(method.parameters_values, calculate_charges_and_statistical_data, minimization_method, method, set_of_molecules_parameterization)
+            final_parameters = local_minimization(method.parameters_values, calculate_charges_and_statistical_data, minimization_method, method, set_of_molecules_parameterization)[0]
         elif optimization_method == "guided_minimization":
-            final_parameters = guided_minimization(calculate_charges_and_statistical_data, set_of_molecules_parameterization, method, num_of_samples, cpu, subset_heuristic, num_of_candidates, minimization_method)
+            final_parameters = guided_minimization(calculate_charges_and_statistical_data, set_of_molecules_parameterization, method, num_of_samples, cpu, num_of_candidates, minimization_method)
+        stdout.write('\x1b[2K')
+        print(colored("ok\n", "green"))
+
+        print("Calculation charges for validation set of molecules...")
         method.new_parameters(final_parameters)
         method.calculate(set_of_molecules_validation)
         results_validation = method.results
@@ -138,7 +134,7 @@ class Parameterization:
 
         emp_chg_file = path.join(data_dir, path.basename(ref_chg_file)).replace(".chg", "_{}.chg".format(str(method)))
         write_charges_to_file(emp_chg_file, results_full_set, set_of_molecules)
-        summary_lines, parameters_json = write_parameters_to_file(path.join(data_dir, "parameters.json"), method, set_of_molecules.sdf_file, optimization_method, minimization_method, start_time, num_of_samples if optimization_method == "guided_minimization" else None, num_of_candidates if optimization_method == "guided_minimization" else None, cpu, git_hash, subset_heuristic if subset_heuristic != 0 else "False")
+        summary_lines, parameters_json = write_parameters_to_file(path.join(data_dir, "parameters.json"), method.parameters, start_time, git_hash)
 
         Comparison().parameterization(set_of_molecules_parameterization,
                                       set_of_molecules_validation,

@@ -14,21 +14,23 @@ from numpy import empty, float32 as npfloat32, int32 as npint32
            "distance_matrix": float32[:, :],
            "bonds": uint32[:, :],
            "ref_charges": float32[:],
-           "emp_charges": float32[:]})
+           "emp_charges": float32[:],
+           "total_charge": float32})
 class Molecule:
-    def __init__(self, name, num_of_atoms, atomic_coordinates, atoms_representation, bonds, bonds_representation):
+    def __init__(self, name, num_of_atoms, atomic_coordinates, atoms_representation, bonds, bonds_representation, total_charge):
         self.name = name
         self.num_of_atoms = num_of_atoms
         self.atomic_coordinates = atomic_coordinates
         self.atoms_representation = atoms_representation
         self.bonds = bonds
         self.bonds_representation = bonds_representation
+        self.total_charge = total_charge
 
 
 def create_molecule_from_charges(name, atoms_representation, ref_charges, emp_charges):
     bonds = List()
     bonds.append("")
-    chg_molecule = Molecule(name, len(atoms_representation), empty((0, 0), dtype=npfloat32), atoms_representation, empty((0, 0), dtype=npint32), bonds)
+    chg_molecule = Molecule(name, len(atoms_representation), empty((0, 0), dtype=npfloat32), atoms_representation, empty((0, 0), dtype=npint32), bonds, 0)
     chg_molecule.ref_charges = ref_charges
     chg_molecule.emp_charges = emp_charges
     return chg_molecule

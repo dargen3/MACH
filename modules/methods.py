@@ -3,7 +3,7 @@ from math import erf
 from sys import exit
 
 from numba import jit
-from numpy import float64, empty, array, zeros, sqrt, sum, random
+from numpy import float64, empty, array, zeros, sqrt, random, dot, exp
 from numpy.linalg import solve
 from termcolor import colored
 
@@ -28,22 +28,25 @@ class Methods:
         if isinstance(self.parameters["atom"]["data"], list):
             self.parameters = convert_parameters_schindler(self.parameters)
 
+
         set_of_molecules_atomic_types = set([atom for molecule in set_of_molecules.molecules for atom in molecule.atoms_representation])
         if "bond" in self.parameters:
             set_of_molecules_bonds_types = set([bond for molecule in set_of_molecules.molecules for bond in molecule.bonds_representation])
+
 
         if convert_parameters:
             if self.parameters["metadata"]["atomic_types_pattern"] != "hbo":
                 exit(colored(f"Error! Only hbo parameters can by used for --convert_parameters option!\n", "red"))
             self.parameters = globals()[f"convert_hbo_{atomic_types_pattern}"](self.parameters, set_of_molecules_atomic_types, set_of_molecules_bonds_types)
 
+
         if self.parameters["metadata"]["atomic_types_pattern"] != atomic_types_pattern:
             exit(colored(f"Error! These parameters are for atomic types pattern {self.parameters['metadata']['atomic_types_pattern']}, but you selected by argument atomic types pattern {atomic_types_pattern}!\n", "red"))
 
         # missing atoms and missing bond are atomic types and bond types which are in set of molecules but not in parameters
-        missing_atoms = set_of_molecules_atomic_types - set(self.parameters["atom"]["data"].keys())
+        missing_atoms = set(set_of_molecules_atomic_types) - set(self.parameters["atom"]["data"].keys())
         if "bond" in self.parameters:
-            missing_bonds = set_of_molecules_bonds_types - set(self.parameters["bond"]["data"].keys())
+            missing_bonds = set(set_of_molecules_bonds_types) - set(self.parameters["bond"]["data"].keys())
 
         if mode == "calculation":
             exit_status = False
@@ -82,18 +85,22 @@ class Methods:
                     print(colored(f"    Bond(s) {', '.join(unused_bonds)} was deleted from parameters.", "yellow"))
 
         self.atomic_types = sorted(self.parameters["atom"]["data"].keys())
-        self.bond_types = sorted(self.parameters["bond"]["data"].keys())
+        try:
+            self.bond_types = sorted(self.parameters["bond"]["data"].keys())
+        except: # dodelat!!!!
+            pass
         parameters_values = []
-        for parameter, values in sorted(self.parameters["atom"]["data"].items()):
+        for _, values in sorted(self.parameters["atom"]["data"].items()):
             parameters_values.extend(values)
         if "bond" in self.parameters:
-            for parameter, value in sorted(self.parameters["bond"]["data"].items()):
+            for _, value in sorted(self.parameters["bond"]["data"].items()):
                 parameters_values.append(value)
         if "common" in self.parameters:
-            parameters_values.extend(sorted(self.parameters["common"].values()))
+            parameters_values.extend(self.parameters["common"].values())
         self.parameters_values = array(parameters_values, dtype=float64)
         self.bounds = (min(self.parameters_values), max(self.parameters_values))
         print(colored("ok\n", "green"))
+
 
     def new_parameters(self, new_parameters):
         self.parameters_values = new_parameters
@@ -129,9 +136,9 @@ def eem_calculate(set_of_molecules, parameters):
         matrix[:, num_of_atoms] = 1.0
         matrix[num_of_atoms, num_of_atoms] = 0.0
         for x, parameter_index in enumerate(molecule.atoms_id):
-            matrix[x][x] = parameters[parameter_index + 1]
+            matrix[x, x] = parameters[parameter_index + 1]
             vector[x] = -parameters[parameter_index]
-        vector[-1] = 0  # formal charge
+        vector[-1] = molecule.total_charge
         results[index: new_index] = solve(matrix, vector)[:-1]
         index = new_index
     return results
@@ -143,7 +150,11 @@ class EEM(Methods):
 
 
 @jit(nopython=True, cache=True)
-def qeq_calculate(set_of_molecules, parameters):
+def qeq_calculate(set_of_molecules, parameters, num_of_atomic_types):
+    rad_values = empty((num_of_atomic_types * 3, num_of_atomic_types * 3), dtype=float64)
+    for x in range(num_of_atomic_types):
+        for y in range(num_of_atomic_types):
+            rad_values[x * 3][y * 3] = sqrt(parameters[x*3+2] * parameters[y*3+2] / (parameters[x*3+2] + parameters[y*3+2]))
     results = empty(set_of_molecules.num_of_atoms, dtype=float64)
     index = 0
     for molecule in set_of_molecules.molecules:
@@ -154,17 +165,12 @@ def qeq_calculate(set_of_molecules, parameters):
         matrix[num_of_atoms, :] = 1.0
         matrix[:, num_of_atoms] = 1.0
         matrix[num_of_atoms, num_of_atoms] = 0.0
-        vector_rad = empty(num_of_atoms, dtype=float64)
-        distance_matrix = molecule.distance_matrix
-        for x, parameter_index in enumerate(molecule.atoms_id):
-            vector_rad[x] = parameters[parameter_index + 2]
-        for i, parameter_index in enumerate(molecule.atoms_id):
-            matrix[i][i] = parameters[parameter_index + 1]
-            vector[i] = -parameters[parameter_index]
-            rad1 = vector_rad[i]
-            for j, (rad2, distance) in enumerate(zip(vector_rad[i + 1:], distance_matrix[i, i + 1:]), i + 1):
-                matrix[i][j] = matrix[j][i] = erf(sqrt(rad1 * rad2 / (rad1 + rad2)) * distance) / distance
-        vector[-1] = 0  # formal charge
+        for i, parameter_index_i in enumerate(molecule.atoms_id):
+            matrix[i, i] = parameters[parameter_index_i + 1]
+            vector[i] = -parameters[parameter_index_i]
+            for j, (parameter_index_j, distance) in enumerate(zip(molecule.atoms_id[i + 1:], molecule.distance_matrix[i, i + 1:]), i + 1):
+                matrix[i, j] = matrix[j, i] = erf(rad_values[parameter_index_i, parameter_index_j] * distance) / distance
+        vector[-1] = molecule.total_charge
         results[index: new_index] = solve(matrix, vector)[:-1]
         index = new_index
     return results
@@ -172,62 +178,90 @@ def qeq_calculate(set_of_molecules, parameters):
 
 class QEq(Methods):
     def calculate(self, set_of_molecules):
-        self.results = qeq_calculate(set_of_molecules, self.parameters_values)
+        self.results = qeq_calculate(set_of_molecules, self.parameters_values, len(self.atomic_types))
 
 
-@jit(nopython=True, cache=True, fastmath=True)
-def acks2_calculate(set_of_molecules, parameters, num_of_atomic_types):
+@jit(nopython=True, cache=True)
+def eqeq_calculate(set_of_molecules, parameters, num_of_atomic_types):
+    k_parameter = parameters[-2]
+    lambda_parameter = parameters[-1]
+    J_values = empty(num_of_atomic_types*2, dtype=float64)
+    X_values = empty(num_of_atomic_types*2, dtype=float64)
+    for x in range(num_of_atomic_types):
+        J_values[x*2] = parameters[x*2] - parameters[x*2 + 1]
+        X_values[x*2] = (parameters[x*2] + parameters[x*2 + 1]) / 2
+    a_values = empty((num_of_atomic_types * 2, num_of_atomic_types * 2), dtype=float64)
+    for x in range(num_of_atomic_types):
+        for y in range(num_of_atomic_types):
+            a_values[x * 2][y * 2] = sqrt(J_values[x*2] * J_values[y*2]) / k_parameter
+    results = empty(set_of_molecules.num_of_atoms, dtype=float64)
+    index = 0
+    for molecule in set_of_molecules.molecules:
+        num_of_atoms = molecule.num_of_atoms
+        new_index = index + num_of_atoms
+        matrix = empty((num_of_atoms + 1, num_of_atoms + 1), dtype=float64)
+        vector = empty(num_of_atoms + 1, dtype=float64)
+        matrix[num_of_atoms, :] = 1.0
+        matrix[:, num_of_atoms] = 1.0
+        matrix[num_of_atoms, num_of_atoms] = 0.0
+        for i, parameter_index_i in enumerate(molecule.atoms_id):
+            matrix[i, i] = J_values[parameter_index_i]
+            vector[i] = -X_values[parameter_index_i]
+            for j, (parameter_index_j, distance) in enumerate(zip(molecule.atoms_id[i + 1:], molecule.distance_matrix[i, i + 1:]), i + 1):
+                a = a_values[parameter_index_i, parameter_index_j]
+                overlap = exp(-a * a * distance**2) * (2 * a - a * a * distance - 1 / distance)
+                matrix[i, j] = matrix[j, i] = lambda_parameter * k_parameter / 2 * (1 / distance + overlap)
+        vector[-1] = molecule.total_charge
+        results[index: new_index] = solve(matrix, vector)[:-1]
+        index = new_index
+    return results
+
+class EQEq(Methods):
+    def calculate(self, set_of_molecules):
+        self.results = eqeq_calculate(set_of_molecules, self.parameters_values, len(self.atomic_types))
+
+
+@jit(nopython=True, cache=True)
+def sqe_calculate(set_of_molecules, parameters, num_of_atomic_types):
     multiplied_widths = empty((num_of_atomic_types * 4, num_of_atomic_types * 4), dtype=float64)
     for x in range(num_of_atomic_types):
         for y in range(num_of_atomic_types):
             multiplied_widths[x * 4][y * 4] = sqrt(2 * parameters[x * 4 + 2] ** 2 + 2 * parameters[y * 4 + 2] ** 2)
-
     results = empty(set_of_molecules.num_of_atoms, dtype=float64)
     index = 0
     for molecule in set_of_molecules.molecules:
-        bonds = molecule.bonds
         num_of_atoms = molecule.num_of_atoms
         new_index = index + num_of_atoms
-        distance_matrix = molecule.distance_matrix
-        matrix = zeros((2 * num_of_atoms + 2, 2 * num_of_atoms + 2))
-        vector = zeros(2 * num_of_atoms + 2)
+        T = zeros((len(molecule.bonds), num_of_atoms))
+        bonds = molecule.bonds
+        for i in range(len(bonds)):
+            atom1, atom2, _ = bonds[i]
+            T[i, atom1] += 1
+            T[i, atom2] -= 1
+        matrix = zeros((num_of_atoms, num_of_atoms))
+        vector = zeros(num_of_atoms)
         list_of_q0 = empty(num_of_atoms, dtype=float64)
-        list_of_eta = empty(num_of_atoms, dtype=float64)
-        for cc, parameter_index in enumerate(molecule.atoms_id):
-            eta = parameters[parameter_index + 1]
-            matrix[cc][cc] = eta
-            list_of_eta[cc] = eta
-            vector[cc] = -parameters[parameter_index]
-            list_of_q0[cc] = parameters[parameter_index + 3]
-            for j, parameter_index_2 in enumerate(molecule.atoms_id[cc + 1:], cc + 1):
-                d = distance_matrix[cc][j]
-                d0 = multiplied_widths[parameter_index][parameter_index_2]
-                matrix[cc, j] = matrix[j, cc] = erf(d / d0) / d
-        vector[:num_of_atoms] += list_of_eta * list_of_q0
-        matrix[num_of_atoms, :num_of_atoms] = 1
-        matrix[:num_of_atoms, num_of_atoms] = 1
-        matrix[-1, num_of_atoms + 1:2 * num_of_atoms + 1] = 1
-        matrix[num_of_atoms + 1:2 * num_of_atoms + 1, -1] = 1
-        vector[num_of_atoms] = sum(list_of_q0)
-        vector[num_of_atoms + 1:2 * num_of_atoms + 1] = list_of_q0
-        for p in range(num_of_atoms):
-            matrix[p, num_of_atoms + 1 + p] = 1.0
-            matrix[num_of_atoms + 1 + p, p] = 1.0
-
-        for b_index, bond_id in enumerate(molecule.bonds_id):
-            bond = bonds[b_index]
-            i = num_of_atoms + 1 + bond[0]
-            j = num_of_atoms + 1 + bond[1]
-            bsoft = 1 / parameters[bond_id]
-            matrix[i, j] += bsoft
-            matrix[j, i] += bsoft
-            matrix[i, i] -= bsoft
-            matrix[j, j] -= bsoft
-        results[index: new_index] = solve(matrix, vector)[:num_of_atoms]
+        list_of_hardness = empty(num_of_atoms, dtype=float64)
+        for i, parameter_index_i in enumerate(molecule.atoms_id):
+            matrix[i, i] = parameters[parameter_index_i + 1]
+            list_of_hardness[i] = parameters[parameter_index_i + 1]
+            vector[i] = -parameters[parameter_index_i]
+            list_of_q0[i] = parameters[parameter_index_i + 3]
+            for j, (parameter_index_j, distance) in enumerate(zip(molecule.atoms_id[i + 1:], molecule.distance_matrix[i, i + 1:]), i + 1):
+                d0 = multiplied_widths[parameter_index_i, parameter_index_j]
+                matrix[i, j] = matrix[j, i] = erf(distance / d0) / distance
+        vector -= dot(matrix, list_of_q0)
+        vector += list_of_hardness*list_of_q0
+        A_sqe = dot(T, dot(matrix, T.T))
+        B_sqe = dot(T, vector)
+        for i, bond_parameters_index in enumerate(molecule.bonds_id):
+            A_sqe[i, i] += parameters[bond_parameters_index]
+        results[index: new_index] = dot(solve(A_sqe, B_sqe), T) + list_of_q0
         index = new_index
     return results
 
 
-class ACKS2(Methods):
+class SQE(Methods):
     def calculate(self, set_of_molecules):
-        self.results = acks2_calculate(set_of_molecules, self.parameters_values, len(self.atomic_types))
+        self.results = sqe_calculate(set_of_molecules, self.parameters_values, len(self.atomic_types))
+

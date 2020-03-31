@@ -1,5 +1,5 @@
 from numba.typed import List
-from numpy import array, int32, float32
+from numpy import array, int32, float32, ones
 from termcolor import colored
 
 from .control_order_of_molecules import control_order_of_molecules
@@ -31,13 +31,6 @@ def write_charges_to_file(charges, results, set_of_molecules):
                 count += 1
             file_with_results.write("\n")
     print(colored("ok\n", "green"))
-
-
-def _sort(a, b):
-    if a > b:
-        return b - 1, a - 1
-    return a - 1, b - 1
-
 
 def _create_atoms_bonds_representation(num_of_atoms, atomic_symbols, bonds, atomic_types_pattern):
     def _create_atom_highest_bond(num_of_atoms, bonds, atomic_symbols):
@@ -90,48 +83,48 @@ def _create_atoms_bonds_representation(num_of_atoms, atomic_symbols, bonds, atom
     return atoms_representation, bonds_representation
 
 
-def load_sdf_v2000(molecular_data, atomic_types_pattern):
-    name = molecular_data[0]
-    info_line = molecular_data[3]
-    num_of_atoms = int(info_line[:3])
-    num_of_bonds = int(info_line[3:6])
-    atomic_symbols, atomic_coordinates, bonds = [], [], []
+def _sort(a, b):
+    if a > b:
+        return b - 1, a - 1
+    return a - 1, b - 1
 
-    # read atoms lines
-    for atom_line in molecular_data[4: num_of_atoms + 4]:
-        c1, c2, c3, symbol = atom_line.split()[:4]
-        atomic_coordinates.append([float(c1), float(c2), float(c3)])
-        atomic_symbols.append(symbol)
+def load_sdf(molecular_data, atomic_types_pattern, sdf_type):
+    if sdf_type == "V2000":
+        name = molecular_data[0]
+        info_line = molecular_data[3]
+        num_of_atoms = int(info_line[:3])
+        num_of_bonds = int(info_line[3:6])
+        atomic_symbols, atomic_coordinates, bonds = [], [], []
 
-    # read bond lines
-    for bond_line in molecular_data[num_of_atoms + 4: num_of_atoms + num_of_bonds + 4]:
-        a1, a2 = _sort(int(bond_line[:3]), int(bond_line[3:6]))
-        bonds.append((a1, a2, int(bond_line[8])))
+        # read atoms lines
+        for atom_line in molecular_data[4: num_of_atoms + 4]:
+            c1, c2, c3, symbol = atom_line.split()[:4]
+            atomic_coordinates.append([float(c1), float(c2), float(c3)])
+            atomic_symbols.append(symbol)
+
+        # read bond lines
+        for bond_line in molecular_data[num_of_atoms + 4: num_of_atoms + num_of_bonds + 4]:
+            a1, a2 = _sort(int(bond_line[:3]), int(bond_line[3:6]))
+            bonds.append((a1, a2, int(bond_line[8])))
+
+    elif sdf_type == "V3000":
+        name = molecular_data[0]
+        info_line = molecular_data[5].split()
+        num_of_atoms = int(info_line[3])
+        num_of_bonds = int(info_line[4])
+        atomic_symbols, atomic_coordinates, bonds = [], [], []
+
+        # read atoms lines
+        for atom_line in molecular_data[7: num_of_atoms + 7]:
+            line = atom_line.split()
+            atomic_coordinates.append(array([float(line[4]), float(line[5]), float(line[6])], dtype=float32))
+            atomic_symbols.append(line[3])
+
+        # read bond lines
+        for bond_line in molecular_data[num_of_atoms + 9: num_of_atoms + num_of_bonds + 9]:
+            line = bond_line.split()
+            a1, a2 = _sort(int(line[4]), int(line[5]))
+            bonds.append((a1, a2, int(line[3])))
 
     atoms_representation, bonds_representation = _create_atoms_bonds_representation(num_of_atoms, atomic_symbols, bonds, atomic_types_pattern)
-
-    return Molecule(name, num_of_atoms, array(atomic_coordinates, dtype=float32), atoms_representation, array(bonds, dtype=int32), bonds_representation)
-
-
-def load_sdf_v3000(molecular_data, atomic_types_pattern):
-    name = molecular_data[0]
-    info_line = molecular_data[5].split()
-    num_of_atoms = int(info_line[3])
-    num_of_bonds = int(info_line[4])
-    atomic_symbols, atomic_coordinates, bonds = [], [], []
-
-    # read atoms lines
-    for atom_line in molecular_data[7: num_of_atoms + 7]:
-        line = atom_line.split()
-        atomic_coordinates.append(array([float(line[4]), float(line[5]), float(line[6])], dtype=float32))
-        atomic_symbols.append(line[3])
-
-    # read bond lines
-    for bond_line in molecular_data[num_of_atoms + 9: num_of_atoms + num_of_bonds + 9]:
-        line = bond_line.split()
-        a1, a2 = _sort(int(line[4]), int(line[5]))
-        bonds.append((a1, a2, int(line[3])))
-
-    atoms_representation, bonds_representation = _create_atoms_bonds_representation(num_of_atoms, atomic_symbols, bonds, atomic_types_pattern)
-
-    return Molecule(name, num_of_atoms, array(atomic_coordinates, dtype=float32), atoms_representation, array(bonds, dtype=int32), bonds_representation)
+    return Molecule(name, num_of_atoms, array(atomic_coordinates, dtype=float32), atoms_representation, array(bonds, dtype=int32), bonds_representation, total_charge=0)
