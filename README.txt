@@ -1,3 +1,8 @@
+./mach.py --mode parameterization --method SQE --sdf results/alexandra/13.sdf --ref_chg results/alexandra/npa_out.chg -f --atomic_types_pattern hbobb --optimization_method local_minimization --data_dir smazat_proteiny_pokus --parameterization_subset 1 --convert_parameters --parameters results/alexandra/2020_03_27_10_47_25_/results_data/parameters.json
+
+
+
+
 conda install numpy scipy numba termcolor argcomplete bokeh gitpython
 
 acks chyba s nábojema (nebyly rovny nule, protože suma q0)
@@ -39,8 +44,4 @@ beyond PEP 8 (3 je zacatek)
 david beazley - superheroes, the fun of reainvention, modules and packages
 
 
-moreline arguments!
-
-atomový typ do druhého řádu
-
-
+hotovo - calculation.py :) 

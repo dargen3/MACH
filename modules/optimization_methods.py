@@ -1,4 +1,3 @@
-from functools import partial
 from heapq import nsmallest
 from operator import itemgetter
 from sys import stdout
@@ -33,15 +32,20 @@ def guided_minimization(objective_function, set_of_molecules, charge_method, num
     samples = lhs(len(charge_method.parameters_values), num_of_samples_modif, *charge_method.bounds)
 
     print("    Calculating of objective function for samples...")
-    partial_f = partial(objective_function, method=charge_method, set_of_molecules=set_of_molecules)
-    candidates_rmsd = [partial_f(sample) for sample in samples]
+    candidates_rmsd = [objective_function(sample, charge_method, set_of_molecules) for sample in samples]
 
     stdout.write('\x1b[2K')
     print("    Selecting candidates...")
     main_candidates = samples[list(map(candidates_rmsd.index, nsmallest(num_of_candidates, candidates_rmsd)))]
 
     print("    Local minimizating...")
-    partial_f = partial(local_minimization, objective_function=objective_function, minimization_method=minimization_method, charge_method=charge_method, set_of_molecules=set_of_molecules)
-    best_candidates = [partial_f(parameters) for parameters in main_candidates]
-    best_candidates.sort(key=itemgetter(1))
-    return best_candidates[0][0]
+    best_parameters = None
+    best_rmsd = 1000000
+    for parameters in main_candidates:
+        opt_parameters, rmsd = local_minimization(parameters, objective_function, minimization_method, charge_method, set_of_molecules)
+        if rmsd < best_rmsd:
+            best_rmsd = rmsd
+            best_parameters = opt_parameters
+
+
+    return best_parameters

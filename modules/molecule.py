@@ -1,6 +1,6 @@
-from numba import jitclass
+from numba.experimental import jitclass
 from numba.typed import List
-from numba.types import string, uint32, float32, uint16, ListType
+from numba.core.types import string, uint32, float32, uint16, ListType
 from numpy import empty, float32 as npfloat32, int32 as npint32
 
 

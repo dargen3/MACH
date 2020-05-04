@@ -114,8 +114,8 @@ class Comparison:
         print("Creating graphs...")
         type_color = {"C": Reds[256], "O": Greens[256], "H": Blues[256], "N": Greys[256]}
         colors = {}
-        for element in sorted(list(set([x.split("~")[0] for x in self.atomic_types]))):
-            element_atomic_types = [x for x in self.atomic_types if x.split("~")[0] == element]
+        for element in sorted(list(set([x.split("~")[0].split("/")[0] for x in self.atomic_types]))):
+            element_atomic_types = [x for x in self.atomic_types if x.split("~")[0].split("/")[0] == element]
             for index, element_atomic_type in enumerate(element_atomic_types, 1):
                 try:
                     if element_atomic_type[0] == "S":

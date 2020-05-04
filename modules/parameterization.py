@@ -1,17 +1,14 @@
 from datetime import datetime as date
-from datetime import timedelta
 from importlib import import_module
-from itertools import chain
 from json import dumps
 from os import path, mkdir
 from shutil import copyfile
-from sys import exit, argv, stdout
+from sys import argv, stdout
 
 import git
-from numba import jit
 from numba.typed import Dict
-from numba.types import float32, int16, string
-from numpy import sum, sqrt, abs, max, array, mean, empty, isnan, float32 as npfloat32
+from numba.core.types import float32, string
+from numpy import sqrt, abs, max, mean, empty, isnan, float32 as npfloat32
 from numpy.linalg import LinAlgError
 from termcolor import colored
 
@@ -54,7 +51,7 @@ def prepare_data_for_comparison(set_of_molecules, emp_charges, atomic_types):
 
 
 def calculate_charges_and_statistical_data(list_of_parameters, method, set_of_molecules):
-    @jit(nopython=True, cache=True)
+    # never jit! It makes memory problem!
     def rmsd_calculation(set_of_molecules, emp_charges, atomic_types):
         atomic_types_rmsd = empty(len(atomic_types))
         for index, symbol in enumerate(atomic_types):
@@ -72,8 +69,7 @@ def calculate_charges_and_statistical_data(list_of_parameters, method, set_of_mo
         method.calculate(set_of_molecules)
     except (LinAlgError, ZeroDivisionError):
         return 1000
-    results = method.results
-    atomic_types_rmsd, rmsd = rmsd_calculation(set_of_molecules, results, method.atomic_types)
+    atomic_types_rmsd, rmsd = rmsd_calculation(set_of_molecules, method.results, method.atomic_types)
     print("Total RMSD: {}    Worst RMSD: {}".format(str(rmsd)[:8], str(max(atomic_types_rmsd))[:8]), end="\r")
     objective_value = rmsd + mean(atomic_types_rmsd)
     if isnan(objective_value):
@@ -82,7 +78,7 @@ def calculate_charges_and_statistical_data(list_of_parameters, method, set_of_mo
 
 
 class Parameterization:
-    def __init__(self, sdf_file, ref_chg_file, parameters, method, optimization_method, minimization_method, atomic_types_pattern, num_of_samples, num_of_candidates, parameterization_subset, cpu, data_dir, rewriting_with_force, seed, convert_parameters, git_hash=None):
+    def __init__(self, sdf_file, ref_chg_file, parameters, method, optimization_method, minimization_method, atomic_types_pattern, num_of_samples, num_of_candidates, parameterization_subset, cpu, data_dir, rewriting_with_force, seed, git_hash=None):
         start_time = date.now()
         files = [(sdf_file, True, "file"),
                  (ref_chg_file, True, "file"),
@@ -94,8 +90,9 @@ class Parameterization:
 
         set_of_molecules = create_set_of_molecules(sdf_file, atomic_types_pattern)
         add_charges_to_set_of_molecules(set_of_molecules, ref_chg_file)
+
         method = getattr(import_module("modules.methods"), method)()
-        method.load_parameters(parameters, set_of_molecules, "parameterization", atomic_types_pattern, convert_parameters)
+        method.load_parameters(parameters, set_of_molecules, "parameterization", atomic_types_pattern)
         set_of_molecules_parameterization, set_of_molecules_validation = create_parameterization_validation_set(set_of_molecules, seed, parameterization_subset, method)
 
         print("Preprocessing data...")

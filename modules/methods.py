@@ -7,14 +7,12 @@ from numpy import float64, empty, array, zeros, sqrt, random, dot, exp
 from numpy.linalg import solve
 from termcolor import colored
 
-from .convert_parameters import convert_parameters_schindler, convert_hbo_hbob, convert_hbo_hbob_sb, convert_hbo_hbobhbo
 
-
-class Methods:
+class Method:
     def __repr__(self):
         return self.__class__.__name__
 
-    def load_parameters(self, parameters_file, set_of_molecules, mode, atomic_types_pattern, convert_parameters):
+    def load_parameters(self, parameters_file, set_of_molecules, mode, atomic_types_pattern):
         if not parameters_file:
             parameters_file = "modules/parameters/{}.json".format(str(self))
 
@@ -25,28 +23,12 @@ class Methods:
         if self.__class__.__name__ != method_in_parameters_file:
             exit(colored(f"Error! These parameters are for method {method_in_parameters_file}, but you selected by argument by method {self.__class__.__name__}!\n", "red"))
 
-        if isinstance(self.parameters["atom"]["data"], list):
-            self.parameters = convert_parameters_schindler(self.parameters)
-
-
-        set_of_molecules_atomic_types = set([atom for molecule in set_of_molecules.molecules for atom in molecule.atoms_representation])
-        if "bond" in self.parameters:
-            set_of_molecules_bonds_types = set([bond for molecule in set_of_molecules.molecules for bond in molecule.bonds_representation])
-
-
-        if convert_parameters:
-            if self.parameters["metadata"]["atomic_types_pattern"] != "hbo":
-                exit(colored(f"Error! Only hbo parameters can by used for --convert_parameters option!\n", "red"))
-            self.parameters = globals()[f"convert_hbo_{atomic_types_pattern}"](self.parameters, set_of_molecules_atomic_types, set_of_molecules_bonds_types)
-
-
-        if self.parameters["metadata"]["atomic_types_pattern"] != atomic_types_pattern:
-            exit(colored(f"Error! These parameters are for atomic types pattern {self.parameters['metadata']['atomic_types_pattern']}, but you selected by argument atomic types pattern {atomic_types_pattern}!\n", "red"))
 
         # missing atoms and missing bond are atomic types and bond types which are in set of molecules but not in parameters
-        missing_atoms = set(set_of_molecules_atomic_types) - set(self.parameters["atom"]["data"].keys())
+        print(self.parameters["atom"]["data"])
+        missing_atoms = set(set_of_molecules.atomic_types) - set(self.parameters["atom"]["data"].keys())
         if "bond" in self.parameters:
-            missing_bonds = set(set_of_molecules_bonds_types) - set(self.parameters["bond"]["data"].keys())
+            missing_bonds = set(set_of_molecules.bonds_types) - set(self.parameters["bond"]["data"].keys())
 
         if mode == "calculation":
             exit_status = False
@@ -62,11 +44,16 @@ class Methods:
 
         elif mode == "parameterization":
             for atom in missing_atoms:
-                self.parameters["atom"]["data"][atom] = [random.random() for _ in range(len(self.parameters["atom"]["names"]))]
-            if missing_atoms:
-                print(colored(f"    Atom(s) {', '.join(missing_atoms)} was added to parameters.", "yellow"))
+                for key, values in self.parameters["atom"]["data"].items():
+                    if key.split("~")[0] == atom.split("~")[0]:
+                        self.parameters["atom"]["data"][atom] = values
+                        print(colored(f"    Atom type {atom} was added to parameters. Parameters derived from {key}", "yellow"))
+                        break
+                else:
+                    self.parameters["atom"]["data"][atom] = [random.random() for _ in range(len(self.parameters["atom"]["names"]))]
+                    print(colored(f"    Atom type {atom} was added to parameters. Parameters are random numbers.", "yellow"))
             # unused atoms are atomic types which are in parameters but not in set of molecules
-            unused_atoms = set(self.parameters["atom"]["data"].keys()) - set_of_molecules_atomic_types
+            unused_atoms = set(self.parameters["atom"]["data"].keys()) - set(set_of_molecules.atomic_types)
             for atom in unused_atoms:
                 del self.parameters["atom"]["data"][atom]
             if unused_atoms:
@@ -74,11 +61,18 @@ class Methods:
 
             if "bond" in self.parameters:
                 for bond in missing_bonds:
-                    self.parameters["bond"]["data"][bond] = random.random()
-                if missing_bonds:
-                    print(colored(f"    Bonds(s) {', '.join(missing_bonds)} was added to parameters.", "yellow"))
+                    for key, value in self.parameters["bond"]["data"].items():
+                        patom1, patom2, ptype = key.split("-")
+                        natom1, natom2, ntype = bond.split("-")
+                        if patom1.split("/")[0] == natom1.split("/")[0] and patom2.split("/")[0] == natom2.split("/")[0] and ptype.split("/")[0] == ntype.split("/")[0]:
+                            self.parameters["bond"]["data"][bond] = value
+                            print(colored(f"    Bond type {bond} was added to parameters. Parameter derived from {key}", "yellow"))
+                            break
+                    else:
+                        self.parameters["bond"]["data"][bond] = random.random()
+                        print(colored(f"    Bond type {bond} was added to parameters. Parameters are random numbers.", "yellow"))
                 # unused bonds are bond types which are in parameters but not in set of molecules
-                unused_bonds = set(self.parameters["bond"]["data"].keys()) - set_of_molecules_bonds_types
+                unused_bonds = set(self.parameters["bond"]["data"].keys()) - set(set_of_molecules.bonds_types)
                 for bond in unused_bonds:
                     del self.parameters["bond"]["data"][bond]
                 if unused_bonds:
@@ -141,12 +135,23 @@ def eem_calculate(set_of_molecules, parameters):
         vector[-1] = molecule.total_charge
         results[index: new_index] = solve(matrix, vector)[:-1]
         index = new_index
+
     return results
 
 
-class EEM(Methods):
+class EEM(Method):
     def calculate(self, set_of_molecules):
-        self.results = eem_calculate(set_of_molecules, self.parameters_values)
+
+        from time import time
+
+
+        for x in range(10):
+            start = time()
+
+
+            self.results = eem_calculate(set_of_molecules, self.parameters_values)
+            print(time() - start)
+
 
 
 @jit(nopython=True, cache=True)
@@ -155,6 +160,7 @@ def qeq_calculate(set_of_molecules, parameters, num_of_atomic_types):
     for x in range(num_of_atomic_types):
         for y in range(num_of_atomic_types):
             rad_values[x * 3][y * 3] = sqrt(parameters[x*3+2] * parameters[y*3+2] / (parameters[x*3+2] + parameters[y*3+2]))
+
     results = empty(set_of_molecules.num_of_atoms, dtype=float64)
     index = 0
     for molecule in set_of_molecules.molecules:
@@ -176,7 +182,7 @@ def qeq_calculate(set_of_molecules, parameters, num_of_atomic_types):
     return results
 
 
-class QEq(Methods):
+class QEq(Method):
     def calculate(self, set_of_molecules):
         self.results = qeq_calculate(set_of_molecules, self.parameters_values, len(self.atomic_types))
 
@@ -216,7 +222,7 @@ def eqeq_calculate(set_of_molecules, parameters, num_of_atomic_types):
         index = new_index
     return results
 
-class EQEq(Methods):
+class EQEq(Method):
     def calculate(self, set_of_molecules):
         self.results = eqeq_calculate(set_of_molecules, self.parameters_values, len(self.atomic_types))
 
@@ -261,7 +267,7 @@ def sqe_calculate(set_of_molecules, parameters, num_of_atomic_types):
     return results
 
 
-class SQE(Methods):
+class SQE(Method):
     def calculate(self, set_of_molecules):
         self.results = sqe_calculate(set_of_molecules, self.parameters_values, len(self.atomic_types))
 

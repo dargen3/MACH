@@ -1,24 +1,14 @@
-from json import load
-
+from json import loads, dumps
+from sys import argv
 
 def _convert_atom_schindler(atom):
     if atom[1] == "hbo":
-        return "{}~{}".format(atom[0], atom[2])
+        return "{}/{}".format(atom[0], atom[2])
     elif atom[1] == "plain":
         return atom[0]
-    elif atom[1] == "hbob":
-        return "/".join([atom[0], atom[2]])
-    elif atom[1] == "hbobhbo":
-        return "/~".join([atom[0], atom[2]])
 
 
 def _convert_atom_racek(atom):
-        if "/~" in atom:
-            s_atom = atom.split("/")
-            return [s_atom[0], "hbobhbo", s_atom[1]]
-        elif "/" in atom:
-            s_atom = atom.split("/")
-            return [s_atom[0], "hbob", s_atom[1]]
         s_atom = atom.split("~")
         if len(s_atom) == 2:
             return [s_atom[0], "hbo", s_atom[1]]
@@ -70,61 +60,12 @@ def convert_parameters_schindler(parameters):
 
     return parameters
 
-def convert_hbo_hbob(parameters, set_of_molecules_atomic_types, set_of_molecules_bond_types):
-    hbob_parameters = {"atom": {"data": {},
-                                "names": parameters["atom"]["names"]},
-                       "metadata": {"atomic_types_pattern": "hbob", "method": parameters["metadata"]["method"]}}
-    for atomic_type in set_of_molecules_atomic_types:
-        hbob_parameters["atom"]["data"][atomic_type] = parameters["atom"]["data"][atomic_type.split("/")[0]]
-
-    if "bond" in parameters:
-        hbob_parameters["bond"] = {"data": {},
-                                   "name": parameters["bond"]["name"]}
-        for bond_type in set_of_molecules_bond_types:
-            hbob_parameters["bond"]["data"][bond_type] = parameters["bond"]["data"]["-".join([x.split("/")[0] for x in bond_type.split("-")])]
-
-    if "common" in parameters:
-        hbob_parameters["common"] = parameters["common"]
-
-    return hbob_parameters
-
-def convert_hbo_hbob_sb(parameters, set_of_molecules_atomic_types, set_of_molecules_bond_types):
-    hbob_sb_parameters = {"atom": {"data": {},
-                                "names": parameters["atom"]["names"]},
-                       "metadata": {"atomic_types_pattern": "hbob_sb", "method": parameters["metadata"]["method"]}}
-    for atomic_type in set_of_molecules_atomic_types:
-        hbob_sb_parameters["atom"]["data"][atomic_type] = parameters["atom"]["data"][atomic_type.split("/")[0]]
-
-    if "bond" in parameters:
-        hbob_sb_parameters["bond"] = {"data": {},
-                                   "name": parameters["bond"]["name"]}
-        for bond_type in set_of_molecules_bond_types:
-            hbob_sb_parameters["bond"]["data"][bond_type] = parameters["bond"]["data"][bond_type]
-    if "common" in parameters:
-        hbob_sb_parameters["common"] = parameters["common"]
-
-    return hbob_sb_parameters
 
 
-def convert_hbo_hbobhbo(parameters, set_of_molecules_atomic_types, set_of_molecules_bond_types):
-    hbobhbo_parameters = {"atom": {"data": {},
-                                "names": parameters["atom"]["names"]},
-                       "metadata": {"atomic_types_pattern": "hbobhbo", "method": parameters["metadata"]["method"]}}
-    for atomic_type in set_of_molecules_atomic_types:
-        hbobhbo_parameters["atom"]["data"][atomic_type] = parameters["atom"]["data"][atomic_type.split("/")[0]]
+new_parameters = convert_parameters_schindler(loads(open(argv[1]).read()))
 
-    if "bond" in parameters:
-        hbobhbo_parameters["bond"] = {"data": {},
-                                   "name": parameters["bond"]["name"]}
-        for bond_type in set_of_molecules_bond_types:
-            hbobhbo_parameters["bond"]["data"][bond_type] = parameters["bond"]["data"]["-".join([x.split("/")[0] for x in bond_type.split("-")])]
-
-    if "common" in parameters:
-        hbobhbo_parameters["common"] = parameters["common"]
-
-    return hbobhbo_parameters
-
-
+with open(argv[1].split("/")[-1] + ".new", "w") as par_file:
+    par_file.write(dumps(new_parameters, indent=2, sort_keys=True))
 
 
 

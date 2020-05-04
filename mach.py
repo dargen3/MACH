@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 from modules.arguments import load_arguments
-from modules.calculation import Calculation
-from modules.calculation_cutoff import CalculationCutoff
+from modules.calculation import calculate_chg
 from modules.calculation_meta import calculation_meta
 from modules.clusterization import clusterize
 from modules.comparison import Comparison
 from modules.parameterization import Parameterization
 from modules.parameterization_meta import parameterization_meta
-from modules.set_of_molecules import SetOfMolecules
 
 from numba import jit
 from numpy import random
 from termcolor import colored
-from warnings import filterwarnings
-
-filterwarnings("ignore")
+# from warnings import filterwarnings
+#
+# filterwarnings("ignore")
 
 
 @jit(nopython=True, cache=True)
@@ -27,28 +25,20 @@ if __name__ == '__main__':
     if args.random_seed != 0:
         random.seed(args.random_seed)
         numba_seed(args.random_seed)
-    print(colored("\nMACH is running with mode: {}\n".format(args.mode), "blue"))
-    if args.mode == "calculation":
-        Calculation(args.sdf_file,
-                    args.method,
-                    args.parameters,
-                    args.emp_chg_file,
-                    args.atomic_types_pattern,
-                    args.rewriting_with_force)
+    print(colored(f"\nMACH is running with mode: {args.mode}\n", "blue"))
 
-    elif args.mode == "calculation_cutoff":
-        CalculationCutoff(args.sdf_file,
-                    args.method,
-                    args.parameters,
-                    args.emp_chg_file,
-                    args.atomic_types_pattern,
-                    args.rewriting_with_force)
+    if args.mode == "calculation":
+        calculate_chg(args.sdf_file,
+                      args.par_file,
+                      args.chg_method,
+                      args.emp_chg_file,
+                      args.rewriting_with_force)
 
     elif args.mode == "parameterization":
         Parameterization(args.sdf_file,
                          args.ref_chg_file,
-                         args.parameters,
-                         args.method,
+                         args.par_file,
+                         args.chg_method,
                          args.optimization_method,
                          args.minimization_method,
                          args.atomic_types_pattern,
@@ -59,7 +49,6 @@ if __name__ == '__main__':
                          args.data_dir,
                          args.rewriting_with_force,
                          args.random_seed,
-                         args.convert_parameters,
                          args.git_hash)
 
     elif args.mode == "comparison":
@@ -91,8 +80,8 @@ if __name__ == '__main__':
                               args.cpu,
                               args.RAM,
                               args.walltime,
-                              args.random_seed,
-                              args.convert_parameters)
+                              args.random_seed)
 
     elif args.mode == "clusterization":
         clusterize(args.ref_chg_file, args.sdf_file, args.atomic_types_pattern)
+
