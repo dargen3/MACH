@@ -9,8 +9,8 @@ body {{font-family: Arial;}}
 
 /* Style the tab */
     .centered {{
-  margin: auto;
-  width: 70%;
+  margin: 0 auto;
+  width: 60%;
       }}
 
 .tab {{
@@ -136,10 +136,10 @@ a.sort-by:after {{
 <hr>
 
 <div class="tab">
-  <button class="tablinks" onclick="openTab(event, 'Correlation graph')">Correlation graph</button>
+  <button class="tablinks" onclick="openTab(event, 'Correlation graph')">Statistics & Correlation graphs</button>
   <button class="tablinks" onclick="openTab(event, 'Bonds')">Bonds</button>
+  <button class="tablinks" onclick="openTab(event, 'Local minimization')">Local minimization</button>
   <button class="tablinks" onclick="openTab(event, 'Parameterization informations')">Parameterization information</button>
-  <button class="tablinks" onclick="openTab(event, 'Parameters')">Parameters</button>
   <button class="tablinks" onclick="openTab(event, 'Files')">Files</button>
   <button class="tablinks" onclick="openTab(event, 'Contact & Licence')">Contact & Licence</button>
 </div>
@@ -204,7 +204,6 @@ Average number of atoms</th></tr>
       <tbody>
 {}
 </table>
-</br>
 <table border="1" style="margin-top: 0.5em">
 <tr>
 <td><strong>Legend:</strong> RMSD </td>
@@ -235,37 +234,45 @@ Average number of atoms</th></tr>
 <br>
 </div>
 
+<div id="Local minimization" class="tabcontent">
+<div class="centered">{}</div>
+</div>
+
+
 <div id="Parameterization informations" class="tabcontent">
 <font size="5">{}</font> 
 </div>
 
-<div id="Parameters" class="tabcontent">
-<br>
-<a href = "parameters.json">parameters.json</a>
-</br></br></br>
-<pre id="json"></pre></div>
-<script>
-document.getElementById("json").innerHTML = JSON.stringify({}, undefined, 2);
-</script>
-
 
 
 <div id="Files" class="tabcontent">
-<h2>Original parameters file</h2>
-<a href = "original_parameters.json">original_parameters.json</a>
-<h2>SDF file</h2>
+<h2>Input files</h2>
+<h3>SDF file:</h3>
 <a href = "{}">{}</a>
-<h2>Empirical charges file</h2>
+<h3>Reference charges file:</h3>
 <a href = "{}">{}</a>
-<h2>Reference charges file</h2>
+<h3>Original parameters file:</h3>
 <a href = "{}">{}</a>
+<br><br><br><br>
+<h2>Output files</h2>
+<h3>Parameters file:</h3>
+<a href = "parameters.json">parameters.json</a>
+<h3>Empirical charges file:</h3>
+<a href = "empirical.chg">empirical.chg</a>
+<h3>Molecules logs file:</h3>
+<a href = "molecules_parameterization.log">molecules_parameterization.log</a>
+<h3>Molecules logs file:</h3>
+<a href = "molecules_validation.log">molecules_validation.log</a>
+
+
+
 </div>
 
 <div id="Contact & Licence" class="tabcontent">
-<font size="5"><b>Author:</b> Ondrej Schindler</br> 
-<b>Email:</b> dargen3@centrum.cz</br> 
+<font size="5"><b>Author:</b> Ondřej Schindler</br> 
+<b>Email:</b> ondrej.schindler@mail.muni.cz</br> 
 <b>Source code:</b> <a href = "https://github.com/dargen3/MACH">https://github.com/dargen3/MACH</a></br>
-<b>Licence:</b> None</font> 
+<b>Licence:</b> <a href = "https://www.gnu.org/licenses/gpl-3.0.en.html">GNU GPLv3</a></br></font> 
 </div>
 
 

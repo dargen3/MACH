@@ -1,119 +1,34 @@
-from numba.typed import List
-from numpy import array, int32, float32
+from os import path, makedirs
+from shutil import rmtree, copy
+from sys import exit
+
 from termcolor import colored
 
-from .control_order_of_molecules import control_order_of_molecules
-from .molecule import Molecule
 
+def control_and_copy_input_files(data_dir: str,
+                                 files: tuple,
+                                 rewriting_with_force: bool):
 
-def add_charges_to_set_of_molecules(set_of_molecules, ref_chg_file):
-    with open(ref_chg_file, "r") as reference_charges_file:
-        names = [data.splitlines()[0] for data in reference_charges_file.read().split("\n\n")[:-1]][:set_of_molecules.num_of_molecules]
-        print(f"Loading charges from {ref_chg_file}...")
-        control_order_of_molecules(names, [molecule.name for molecule in set_of_molecules.molecules], ref_chg_file, set_of_molecules.sdf_file)
-        reference_charges_file.seek(0)
-        for molecule_data, molecule in zip(reference_charges_file.read().split("\n\n")[:-1], set_of_molecules.molecules):
-            molecule_charges = []
-            for line in molecule_data.splitlines()[2:]:
-                molecule_charges.append(float(line.split()[2]))
-            molecule.ref_charges = array(molecule_charges, dtype=float32)
+    print(f'Control presence of output directory {data_dir}...')
+    if path.isdir(data_dir):
+        if rewriting_with_force:
+            rmtree(data_dir)
+            print(f"    {data_dir} directory was deleted...")
+        else:
+            exit(colored(f"ERROR! {data_dir} directory is present. If you want to rewrite it"
+                         f"run MACH with -f or --rewriting_with_force option.\n", "red"))
     print(colored("ok\n", "green"))
 
-
-def write_charges_to_file(charges, results, set_of_molecules):
-    print(f"Writing charges to {charges}...")
-    with open(charges, "w") as file_with_results:
-        count = 0
-        for molecule in set_of_molecules.molecules:
-            file_with_results.write("{}\n{}\n".format(molecule.name, molecule.num_of_atoms))
-            for index, atom in enumerate(molecule.atoms_representation):
-                file_with_results.write("{0:>3} {1:>3} {2:>15}\n".format(index + 1, atom.split("/")[0], str(float("{0:.6f}".format(results[count])))))
-                count += 1
-            file_with_results.write("\n")
+    print('Control presence of input files... \n    {}'.format("\n    ".join([file for file in files])))
+    for file in files:
+        if not path.isfile(file):
+            exit(colored(f"ERROR! There is no file {file}.\n", "red"))
     print(colored("ok\n", "green"))
 
-def _create_atoms_bonds_representation(num_of_atoms, atomic_symbols, bonds, atomic_types_pattern):
-    def _create_atom_highest_bond(num_of_atoms, bonds, atomic_symbols):
-        highest_bonds = [1] * num_of_atoms
-        for ba1, ba2, type in bonds:
-            if highest_bonds[ba1] < type:
-                highest_bonds[ba1] = type
-            if highest_bonds[ba2] < type:
-                highest_bonds[ba2] = type
-        return [atomic_symbol + "/" + str(hbo) for atomic_symbol, hbo in zip(atomic_symbols, highest_bonds)]
-
-    # create atoms_representation
-    # plain (plain atom) = C, H, N, ...
-    # hbo (highest bond order) = C/1, C/2, H/1, N/3, ...
-    # plain-ba (plain atom + bonded atoms) = C/CCHH, H/N, ...
-    # plain-ba-sb (plain atom + bonded atoms + simple bond definition) = C/CCHH, H/N, ...
-    # plain-ba-sb (plain atom + bonded atoms + simple bond definition) = C/CCHH, H/N, ...
-    if atomic_types_pattern == "plain":
-        atoms_representation = List([atom for atom in atomic_symbols])
-    elif atomic_types_pattern == "hbo":
-        atoms_representation = List([atom for atom in _create_atom_highest_bond(num_of_atoms, bonds, atomic_symbols)])
-    elif atomic_types_pattern in ["plain-ba", "plain-ba-sb"]:
-        bonded_atoms = [[] for _ in range(num_of_atoms)]
-        for ba1, ba2, _ in bonds:
-            bonded_atoms[ba1].append(atomic_symbols[ba2])
-            bonded_atoms[ba2].append(atomic_symbols[ba1])
-            atoms_representation = List([f"{atomic_symbol}/{''.join(sorted(bonded_atoms))}" for atomic_symbol, bonded_atoms in zip(atomic_symbols, bonded_atoms)])
-
-    # create bonds_representation
-    # plain (plain atom) = C-H-1, C-N-2, ...
-    # hbo (highest bond order) = C/1-H/1-1, C/2-N/2-2, ...
-    # plain-ba (plain atom + bonded atoms) = C/CCHH-H/C-1,...
-    # plain-ba-sb (plain atom + bonded atoms + simple bond definition) = C-H-1, C-N-2, ... (same as plain)
-    if atomic_types_pattern == "plain-ba-sb":
-        bonds_representation = List([f"{'-'.join(sorted([atomic_symbols[ba1], atomic_symbols[ba2]]))}-{bond_type}" for ba1, ba2, bond_type in bonds])
-    else:
-        bonds_representation = List([f"{'-'.join(sorted([atoms_representation[ba1], atoms_representation[ba2]]))}-{bond_type}" for ba1, ba2, bond_type in bonds])
-    return atoms_representation, bonds_representation
-
-
-def load_sdf(molecule_data, atomic_types_pattern):
-    def _sort(a, b):
-        if a > b:
-            return b - 1, a - 1
-        return a - 1, b - 1
-
-    sdf_type = molecule_data[3][-5:]
-    if sdf_type == "V2000":
-        name = molecule_data[0]
-        info_line = molecule_data[3]
-        num_of_atoms = int(info_line[:3])
-        num_of_bonds = int(info_line[3:6])
-        atomic_symbols, atomic_coordinates, bonds = [], [], []
-
-        # read atoms lines
-        for atom_line in molecule_data[4: num_of_atoms + 4]:
-            c1, c2, c3, symbol = atom_line.split()[:4]
-            atomic_coordinates.append([float(c1), float(c2), float(c3)])
-            atomic_symbols.append(symbol)
-
-        # read bond lines
-        for bond_line in molecule_data[num_of_atoms + 4: num_of_atoms + num_of_bonds + 4]:
-            a1, a2 = _sort(int(bond_line[:3]), int(bond_line[3:6]))
-            bonds.append((a1, a2, int(bond_line[8])))
-
-    elif sdf_type == "V3000":
-        name = molecule_data[0]
-        info_line = molecule_data[5].split()
-        num_of_atoms = int(info_line[3])
-        num_of_bonds = int(info_line[4])
-        atomic_symbols, atomic_coordinates, bonds = [], [], []
-
-        # read atoms lines
-        for atom_line in molecule_data[7: num_of_atoms + 7]:
-            line = atom_line.split()
-            atomic_coordinates.append(array([float(line[4]), float(line[5]), float(line[6])], dtype=float32))
-            atomic_symbols.append(line[3])
-
-        # read bond lines
-        for bond_line in molecule_data[num_of_atoms + 9: num_of_atoms + num_of_bonds + 9]:
-            line = bond_line.split()
-            a1, a2 = _sort(int(line[4]), int(line[5]))
-            bonds.append((a1, a2, int(line[3])))
-
-    atoms_representation, bonds_representation = _create_atoms_bonds_representation(num_of_atoms, atomic_symbols, bonds, atomic_types_pattern)
-    return Molecule(name, num_of_atoms, array(atomic_coordinates, dtype=float32), atoms_representation, array(bonds, dtype=int32), bonds_representation, total_charge=0)
+    print(f'Creation of output directory {data_dir} and copying input files...')
+    input_files_data_dir = path.join(data_dir, "input_files")
+    makedirs(input_files_data_dir)
+    makedirs(path.join(data_dir, "output_files"))
+    for file in files:
+        copy(file, input_files_data_dir)
+    print(colored("ok\n", "green"))

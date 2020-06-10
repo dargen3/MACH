@@ -1,36 +1,24 @@
 from numba.experimental import jitclass
-from numba.typed import List
 from numba.core.types import string, uint32, float32, uint16, ListType
-from numpy import empty, float32 as npfloat32, int32 as npint32
 
 
 @jitclass({"name": string,
-           "num_of_atoms": uint32,
-           "atomic_coordinates": float32[:, :],
-           "atoms_id": uint16[:],
-           "bonds_id": uint16[:],
-           "atoms_representation": ListType(string),
-           "bonds_representation": ListType(string),
+           "num_of_ats": uint32,
+           "ats_coordinates": float32[:, :],
+           "ats_ids": uint16[:],
+           "bonds_ids": uint16[:],
+           "ats_srepr": ListType(string),
+           "bonds_srepr": ListType(string),
            "distance_matrix": float32[:, :],
            "bonds": uint32[:, :],
-           "ref_charges": float32[:],
-           "emp_charges": float32[:],
-           "total_charge": float32})
+           "ref_chgs": float32[:],
+           "emp_chgs": float32[:],
+           "total_chg": float32})
 class Molecule:
-    def __init__(self, name, num_of_atoms, atomic_coordinates, atoms_representation, bonds, bonds_representation, total_charge):
+    def __init__(self, name, num_of_ats, ats_coordinates, ats_srepr, bonds, bonds_srepr):
         self.name = name
-        self.num_of_atoms = num_of_atoms
-        self.atomic_coordinates = atomic_coordinates
-        self.atoms_representation = atoms_representation
+        self.num_of_ats = num_of_ats
+        self.ats_coordinates = ats_coordinates
+        self.ats_srepr = ats_srepr
         self.bonds = bonds
-        self.bonds_representation = bonds_representation
-        self.total_charge = total_charge
-
-
-def create_molecule_from_charges(name, atoms_representation, ref_charges, emp_charges):
-    bonds = List()
-    bonds.append("")
-    chg_molecule = Molecule(name, len(atoms_representation), empty((0, 0), dtype=npfloat32), atoms_representation, empty((0, 0), dtype=npint32), bonds, 0)
-    chg_molecule.ref_charges = ref_charges
-    chg_molecule.emp_charges = emp_charges
-    return chg_molecule
+        self.bonds_srepr = bonds_srepr

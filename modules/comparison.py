@@ -1,323 +1,399 @@
 # -*- coding: utf-8 -*-
-from collections import Counter, defaultdict
-from os import path, mkdir
-from shutil import copyfile
-
-from bokeh.embed import components
-from bokeh.models import Legend, Range1d, Label, ColumnDataSource
-from bokeh.models.widgets import Panel, Tabs
-from bokeh.palettes import Reds, Greens, Blues, Greys
+from collections import Counter, defaultdict, namedtuple
+import resource
+import bokeh as bk
+import numpy as np
 from bokeh.plotting import figure
-from bokeh.resources import INLINE
-from bokeh.util.browser import view
-from numpy import sqrt, mean, max, min, sum, corrcoef
 from termcolor import colored
 
-from .control_existing import control_existing_files
-from .set_of_molecules import create_set_of_molecules_from_chg_files
+from .input_output import control_and_copy_input_files
+from .set_of_molecules import SetOfMolecules, create_set_of_mols, add_chgs_to_set_of_mols
 
 
-def background_color(value):
+def comparison(sdf_file: str,
+               ref_chgs_file: str,
+               emp_chgs_file: str,
+               ats_types_pattern: str,
+               data_dir: str,
+               rewriting_with_force: bool):
+
+    control_and_copy_input_files(data_dir,
+                                 (sdf_file, ref_chgs_file, emp_chgs_file),
+                                 rewriting_with_force)
+
+    set_of_mols = create_set_of_mols(sdf_file, ats_types_pattern)
+    add_chgs_to_set_of_mols(set_of_mols, emp_chgs_file, "emp_chgs")
+    add_chgs_to_set_of_mols(set_of_mols, ref_chgs_file, "ref_chgs")
+
+    print("Calculation of statistical data...")
+    stats = _stats(set_of_mols, f"{data_dir}/output_files/molecules.log")
+    print(colored("ok\n", "green"))
+
+    print("Creation of correlation graph...")
+    corr_graph = _corr_graph(set_of_mols,
+                             _colors(set_of_mols.ats_types),
+                             stats,
+                             "Correlation graph",
+                             _graph_ranges(np.concatenate((set_of_mols.ref_chgs,
+                                                           set_of_mols.emp_chgs)))),
+    print(colored("ok\n", "green"))
+
+    print("Writing html file...")
+    _write_html_comparison(set_of_mols,
+                           data_dir,
+                           corr_graph,
+                           stats)
+    print(colored("ok\n", "green"))
+
+
+def comparison_par(set_of_mols_par: SetOfMolecules,
+                   set_of_mols_val: SetOfMolecules,
+                   params_file: str,
+                   data_dir: str,
+                   loc_min_courses: list,
+                   par_info: list):
+
+    print("Calculation of statistical data...")
+    stats_par = _stats(set_of_mols_par, f"{data_dir}/output_files/molecules_parameterization.log")
+    stats_val = _stats(set_of_mols_val, f"{data_dir}/output_files/molecules_validation.log")
+    print(colored("ok\n", "green"))
+
+    print("Creation of graphs...")
+    colors = _colors(set_of_mols_par.ats_types)
+    graph_ranges = _graph_ranges(np.concatenate((set_of_mols_par.ref_chgs,
+                                                 set_of_mols_par.emp_chgs,
+                                                 set_of_mols_val.ref_chgs,
+                                                 set_of_mols_val.emp_chgs)))
+    tabs = [bk.models.widgets.Panel(child=_corr_graph(set_of_mols_par,
+                                                      colors,
+                                                      stats_par,
+                                                      "Correlation graph - parameterization",
+                                                      graph_ranges),
+                                    title="Parameterization"),
+            bk.models.widgets.Panel(child=_corr_graph(set_of_mols_val,
+                                                      colors,
+                                                      stats_val,
+                                                      "Correlation graph - validation",
+                                                      graph_ranges),
+                                    title="Validation"),
+            bk.models.widgets.Panel(child=_comparison_corr_graph(set_of_mols_par,
+                                                                 set_of_mols_val,
+                                                                 stats_par,
+                                                                 stats_val,
+                                                                 graph_ranges),
+                                    title="Comparison")]
+    loc_min_graph = _graph_loc_min(loc_min_courses)
+    print(colored("ok\n", "green"))
+
+    print("Writing html file...")
+    _write_html_par(f"{data_dir}/output_files/parameterization.html",
+                    bk.models.widgets.Tabs(tabs=tabs),
+                    loc_min_graph,
+                    stats_par,
+                    stats_val,
+                    set_of_mols_par,
+                    par_info,
+                    params_file)
+    print(colored("ok\n", "green"))
+
+
+def _stats(set_of_mols: SetOfMolecules,
+           mols_log_file: str) -> namedtuple:
+
+    def _calculate_stats(ref_chgs: np.array,
+                         emp_chgs: np.array) -> namedtuple:
+
+        deviations = abs(ref_chgs - emp_chgs)
+        rmsd = round(np.sqrt((1.0 / deviations.size) * np.sum(deviations ** 2)), 4)
+        max_deviation = round(np.max(deviations), 4)
+        average_deviation = round(np.mean(deviations), 4)
+        pearson_2 = round(np.corrcoef(ref_chgs, emp_chgs)[0, 1] ** 2, 4)
+        return namedtuple("stats", ["rmsd",
+                                    "max_deviation",
+                                    "average_deviation",
+                                    "pearson_2",
+                                    "count"])(rmsd,
+                                              max_deviation,
+                                              average_deviation,
+                                              pearson_2,
+                                              deviations.size)
+
+    all_ats_data = _calculate_stats(set_of_mols.ref_chgs, set_of_mols.emp_chgs)
+
+    ats_types_data = []
+    for at_type in set_of_mols.ats_types:
+        at_type_data = _calculate_stats(set_of_mols.ref_ats_types_chgs[at_type],
+                                        set_of_mols.emp_ats_types_chgs[at_type])
+        percent = round(at_type_data[4] / (all_ats_data[4] / 100), 2)
+        ats_types_data.append([at_type,
+                               *at_type_data,
+                               percent])
+
+    mols_data = np.round([_calculate_stats(mol.ref_chgs, mol.emp_chgs) for mol in set_of_mols.mols], 4)
+    with open(mols_log_file, "w") as mols_log_file:
+        mols_log_file.write("name, atomic types, rmsd, maximum deviation, average deviation, pearson**2, number of atoms\n")
+        for mol, (rmsd, max_dev, av_dev, pearson, num_of_at) in zip(set_of_mols.mols, mols_data):
+            mols_log_file.write(
+                f"{mol.name}, {';'.join(set(mol.ats_srepr))}, {rmsd}, {max_dev}, {av_dev}, {pearson}, {int(num_of_at)}\n")
+    mols_num_of_at = [mol.num_of_ats for mol in set_of_mols.mols]
+    averaged_mols_data = [*[round(np.mean(mols_data[:, y]), 4) for y in range(4)],
+                          set_of_mols.num_of_mols,
+                          np.min(mols_num_of_at),
+                          np.max(mols_num_of_at),
+                          int(np.mean(mols_num_of_at))]
+
+    counter_bonds = Counter([bond for mol in set_of_mols.mols for bond in mol.bonds_srepr])
+    return namedtuple("stat_data", ["all_ats",
+                                    "ats_types",
+                                    "mols",
+                                    "bonds"])(all_ats_data,
+                                              ats_types_data,
+                                              averaged_mols_data,
+                                              counter_bonds)
+
+
+def _corr_graph(set_of_mols: SetOfMolecules,
+                colors: dict,
+                stats: namedtuple,
+                title_of_graph: str,
+                graph_ranges: tuple) -> figure:
+
+    graph = figure(plot_width=1050,
+                   plot_height=900,
+                   title=title_of_graph,
+                   x_axis_label="Reference charges",
+                   y_axis_label="Empirical charges",
+                   output_backend="webgl",
+                   tooltips=[("Atomic type", "$name"),
+                             ("Reference charge", "@ref_chg"),
+                             ("Empirical charge", "@emp_chg"),
+                             ("Molecule", "@mols"),
+                             ("Index", "@indices")])
+    graph.toolbar.active_inspect = None
+    graph.title.align = "center"
+    graph.title.text_font_size = "17pt"
+    graph.xaxis.axis_label_text_font_size = "25px"
+    graph.yaxis.axis_label_text_font_size = "25px"
+    graph.axis.major_label_text_font_size = '20px'
+    graph.x_range = bk.models.Range1d(*graph_ranges)
+    graph.y_range = bk.models.Range1d(*graph_ranges)
+
+    source_mols_names = defaultdict(list)
+    source_indices = defaultdict(list)
+    for mol in set_of_mols.mols:
+        for index, symbol in enumerate(mol.ats_srepr, start=1):
+            source_mols_names[symbol].append(mol.name)
+            source_indices[symbol].append(index)
+
+    graph.line([-1000, 1000], [-1000, 1000])
+    legends = []
+    for index, at_symbol in enumerate(set_of_mols.ats_types):
+        color = colors[at_symbol]
+        oc = graph.circle("ref_chg",
+                          "emp_chg",
+                          size=6,
+                          fill_color=color,
+                          line_color=color,
+                          name=at_symbol,
+                          source=bk.models.ColumnDataSource(
+                              data=dict(emp_chg=set_of_mols.emp_ats_types_chgs[at_symbol],
+                                        ref_chg=set_of_mols.ref_ats_types_chgs[at_symbol],
+                                        indices=source_indices[at_symbol],
+                                        mols=source_mols_names[at_symbol])))
+        legends.append((at_symbol, [oc]))
+
+    graph.add_layout(bk.models.Legend(items=legends,
+                                      label_width=100,
+                                      label_height=20,
+                                      margin=0,
+                                      label_text_font_size="15px",
+                                      border_line_color="white"), "left")
+    graph.legend.click_policy = "hide"
+
+    graph.add_layout(bk.models.Label(x=613,
+                                     y=35,
+                                     x_units='screen',
+                                     y_units='screen',
+                                     text=f'RMSD: {stats.all_ats.rmsd}',
+                                     render_mode='css',
+                                     text_font_size="25px"))
+    graph.add_layout(bk.models.Label(x=660,
+                                     y=11,
+                                     x_units='screen',
+                                     y_units='screen',
+                                     text=f'R²: {stats.all_ats.pearson_2}',
+                                     render_mode='css',
+                                     text_font_size="25px"))
+    return graph
+
+
+def _comparison_corr_graph(set_of_mol_par: SetOfMolecules,
+                           set_of_mol_val: SetOfMolecules,
+                           stats_par: namedtuple,
+                           stats_val: namedtuple,
+                           graph_ranges: tuple) -> figure:
+
+    graph = figure(plot_width=1050,
+                   plot_height=900,
+                   title="Correlation graph - parameterization & validation",
+                   x_axis_label="Reference charges",
+                   y_axis_label="Empirical charges",
+                   output_backend="webgl")
+    graph.title.align = "center"
+    graph.title.text_font_size = "17pt"
+    graph.xaxis.axis_label_text_font_size = "25px"
+    graph.yaxis.axis_label_text_font_size = "25px"
+    graph.axis.major_label_text_font_size = '20px'
+    graph.x_range = bk.models.Range1d(*graph_ranges)
+    graph.y_range = bk.models.Range1d(*graph_ranges)
+
+    graph.line([-1000, 1000], [-1000, 1000])
+    graph.circle(set_of_mol_par.ref_chgs,
+                 set_of_mol_par.emp_chgs,
+                 size=6,
+                 legend="Parameterization",
+                 fill_color="black",
+                 line_color="black")
+    graph.circle(set_of_mol_val.ref_chgs,
+                 set_of_mol_val.emp_chgs,
+                 size=6,
+                 legend="Validation",
+                 fill_color="red",
+                 line_color="red")
+    graph.legend.location = "top_left"
+    graph.legend.click_policy = "hide"
+
+    graph.add_layout(bk.models.Label(x=596,
+                                     y=35,
+                                     x_units='screen',
+                                     y_units='screen',
+                                     text=f'ΔRMSD: {round(abs(stats_par.all_ats.rmsd - stats_val.all_ats.rmsd), 4)}',
+                                     render_mode='css',
+                                     text_font_size="25px"))
+    graph.add_layout(bk.models.Label(x=643,
+                                     y=11,
+                                     x_units='screen',
+                                     y_units='screen',
+                                     text=f'ΔR²: {round(abs(stats_par.all_ats.pearson_2 - stats_val.all_ats.pearson_2), 4)}',
+                                     render_mode='css',
+                                     text_font_size="25px"))
+    return graph
+
+
+def _graph_ranges(chg: np.array) -> tuple:
+
+    max_chg = np.max(chg)
+    min_chg = np.min(chg)
+    corr = (max_chg - min_chg) / 10
+    return min_chg - corr, max_chg + corr
+
+
+def _graph_loc_min(loc_min_courses: list) -> figure:
+    graph = figure(plot_width=1050,
+                   plot_height=900,
+                   title="Local minimization progress from multiple points",
+                   x_axis_label="Step",
+                   x_axis_type="log",
+                   y_axis_label="Objective value",
+                   output_backend="webgl",)
+    graph.title.align = "center"
+    graph.title.text_font_size = "17pt"
+    graph.xaxis.axis_label_text_font_size = "25px"
+    graph.yaxis.axis_label_text_font_size = "25px"
+    graph.axis.major_label_text_font_size = '20px'
+    graph.x_range.start = 0
+    graph.legend.location = "top_right"
+    graph.legend.click_policy = "hide"
+    pallete = bk.palettes.Category20[20]
+    for index, course in enumerate(loc_min_courses):
+        graph.line([x for x in range(len(course))],
+                   course,
+                   color=pallete[index],
+                   line_width=3,
+                   legend=str(index+1))
+    return graph
+
+
+def _colors(at_types: list) -> dict:
+
+    type_color = {"C": bk.palettes.Reds[256],
+                  "O": bk.palettes.Greens[256],
+                  "H": bk.palettes.Blues[256],
+                  "N": bk.palettes.Greys[256]}
+    colors = {}
+    for element in sorted(set([x.split("/")[0] for x in at_types])):
+        element_ats_types = [x for x in at_types if x.split("/")[0] == element]
+        for index, element_ats_type in enumerate(element_ats_types, 1):
+            try:
+                if element_ats_type[0] == "S":
+                    colors[element_ats_type] = ["#FF00FF", "#FF33FF", "#FF66FF", "#FF99FF"][index - 1]
+                else:
+                    colors[element_ats_type] = type_color[element][int(200 / (len(element_ats_types) + 1)) * index]
+            except KeyError:
+                colors[element_ats_type] = "black"
+    return colors
+
+
+def _background_color(value: float) -> str:
     return "green" if value < 0.05 else "#4ca64c" if value < 0.1 else "#99cc99" if value < 0.15 \
         else "yellow" if value < 0.2 else "orange" if value < 0.3 else "red; color: white" if value < 0.4 \
         else "darkred; color: white"
 
 
-def calculate_statistics(ref_charges, emp_charges):
-    deviations = abs(ref_charges - emp_charges)
-    rmsd = sqrt((1.0 / deviations.size) * sum(deviations ** 2))
-    max_deviation = max(deviations)
-    average_deviation = mean(deviations)
-    pearson_2 = corrcoef(ref_charges, emp_charges)[0, 1] ** 2
-    return [rmsd, max_deviation, average_deviation, pearson_2, deviations.size]
+def _format_input_file(file: str) -> tuple:
+    return f"../input_files/{file.split('/')[-1]}", f"../input_files/{file.split('/')[-1]}"
 
 
-class Comparison:
-    def comparison(self, ref_chg_file, emp_chg_file, data_dir, rewriting_with_force):
-        self.data_dir = data_dir
-        self.set_of_molecules_parameterization = None
-        self.output_file = "{}_{}.html".format(path.basename(emp_chg_file).split(".")[0],
-                                               path.basename(ref_chg_file).split(".")[0])
-        control_existing_files(((ref_chg_file, True, "file"),
-                                (emp_chg_file, True, "file"),
-                                (self.output_file, False, "file"),
-                                (self.data_dir, False, "directory")),
-                               rewriting_with_force)
-        mkdir(self.data_dir)
-        self.set_of_molecules = create_set_of_molecules_from_chg_files(ref_chg_file, emp_chg_file)
-        self.atomic_types = set([atom for molecule in self.set_of_molecules.molecules for atom in molecule.atoms_representation])
-        self.statistics_comparison()
-        self.graphs()
-        self.write_html_comparison()
+def _write_html_comparison(set_of_mols: SetOfMolecules,
+                           data_dir: str,
+                           correlation_graph: figure,
+                           stats: namedtuple):
 
-    def parameterization(self, set_of_molecules_parameterization, set_of_molecules_validation, output_file, sdf_file, emp_chg_file, ref_chg_file, summary_lines, parameters_json, atomic_types):
-        self.set_of_molecules_parameterization = set_of_molecules_parameterization
-        self.set_of_molecules = self.set_of_molecules_parameterization
-        self.set_of_molecules_validation = set_of_molecules_validation
-        self.atomic_types = atomic_types
-        self.statistics_parameterization()
-        self.graphs()
-        self.write_html_parameterization(output_file, sdf_file, emp_chg_file, ref_chg_file, summary_lines, parameters_json)
+    script, correlation_graph_html_source = bk.embed.components(correlation_graph)
+    output_file = f"{data_dir}/output_files/comparison.html"
+    with open(output_file, "w") as html_file:
+        html_file.write(open("modules/html_patterns/pattern_comparison.txt").read().format(
+            script, bk.resources.INLINE.render(),
+            "</td><td>\n".join([str(item) for item in stats.all_ats]),
+            "</td><td>\n".join([str(item) for item in stats.mols]),
+            "".join([f"\n<tr style=\"background-color: {_background_color(at_type[1])};\"><td>" +
+                     "</td><td>".join([str(item) for item in at_type]) + "</td></tr>" for at_type in stats.ats_types]),
+            correlation_graph_html_source[0],
+            "".join(["\n<tr><td>" + "</td><td>".join([str(item) for item in bond_type]) + "</td></tr>" for bond_type in stats.bonds.items()]),
+            *_format_input_file(set_of_mols.sdf_file),
+            *_format_input_file(set_of_mols.emp_chgs_file),
+            *_format_input_file(set_of_mols.ref_chgs_file)))
+    bk.util.browser.view(output_file)
 
-    def statistics_comparison(self):
-        print("Calculating statistical data...")
-        self.all_atoms_data = [round(item, 4) for item in
-                               calculate_statistics(self.set_of_molecules.ref_charges,
-                                                    self.set_of_molecules.emp_charges)]
-        self.atomic_types_data = []
-        for (atomic_type, ref_charges), (atomic_type2, emp_charges) in zip(self.set_of_molecules.ref_atomic_types_charges.items(),
-                                                                           self.set_of_molecules.emp_atomic_types_charges.items()):
-            atomic_type_data = [round(item, 4) for item in calculate_statistics(ref_charges, emp_charges)]
-            self.atomic_types_data.append([atomic_type] + atomic_type_data + [round(atomic_type_data[4] / (self.all_atoms_data[4] / 100), 2)])
-        molecules_statistical_data = [calculate_statistics(molecule.ref_charges, molecule.emp_charges) for molecule in self.set_of_molecules.molecules]
-        molecules_num_of_atoms = [molecule[4] for molecule in molecules_statistical_data]
-        self.molecules_data = [round(item, 4) for item in [mean([x[y] for x in molecules_statistical_data]) for y in range(4)] + [self.set_of_molecules.num_of_molecules, min(molecules_num_of_atoms), max(molecules_num_of_atoms), mean(molecules_num_of_atoms)]]
-        print(colored("ok\n", "green"))
 
-    def statistics_parameterization(self):
-        print("Calculating statistical data...")
-        self.all_atoms_data = [round(item, 4) for item in
-                               calculate_statistics(self.set_of_molecules_parameterization.ref_charges,
-                                                    self.set_of_molecules_parameterization.emp_charges)]
-        self.atomic_types_data_parameterization = []
-        for atomic_symbol in self.atomic_types:
-            atomic_type_data = [round(item, 4) for item in calculate_statistics(self.set_of_molecules_parameterization.ref_atomic_types_charges[atomic_symbol], self.set_of_molecules_parameterization.emp_atomic_types_charges[atomic_symbol])]
-            self.atomic_types_data_parameterization.append([atomic_symbol] + atomic_type_data + [round(atomic_type_data[4] / (self.all_atoms_data[4] / 100), 2)])
-        self.atoms_data_validation = [round(item, 4) for item in
-                                      calculate_statistics(self.set_of_molecules_validation.ref_charges,
-                                                           self.set_of_molecules_validation.emp_charges)]
-        self.atomic_types_data_validation = []
-        for atomic_symbol in self.atomic_types:
-            # try ... except construct is necessary, because validation set dont have to contain all atomic types contained in parameterization set
-            try:
-                atomic_type_data = [round(item, 4) for item in calculate_statistics(self.set_of_molecules_validation.ref_atomic_types_charges[atomic_symbol], self.set_of_molecules_validation.emp_atomic_types_charges[atomic_symbol])]
-                self.atomic_types_data_validation.append([atomic_symbol] + atomic_type_data + [round(atomic_type_data[4] / (self.atoms_data_validation[4] / 100), 2)])
-            except KeyError:
-                continue
-        molecules_statistical_data_parameterization = [calculate_statistics(molecule.ref_charges, molecule.emp_charges) for molecule in self.set_of_molecules_parameterization.molecules]
-        molecules_num_of_atoms_parameterization = [molecule[4] for molecule in molecules_statistical_data_parameterization]
-        self.molecules_data_parameterization = [round(item, 4) for item in [mean([x[y] for x in molecules_statistical_data_parameterization]) for y in range(4)] + [self.set_of_molecules_parameterization.num_of_molecules, min(molecules_num_of_atoms_parameterization), max(molecules_num_of_atoms_parameterization), mean(molecules_num_of_atoms_parameterization)]]
-        molecules_statistical_data_validaton = [calculate_statistics(molecule.ref_charges, molecule.emp_charges) for molecule in self.set_of_molecules_validation.molecules]
-        molecules_num_of_atoms_validation = [molecule[4] for molecule in molecules_statistical_data_validaton]
-        self.molecules_data_validation = [round(item, 4) for item in [mean([x[y] for x in molecules_statistical_data_validaton]) for y in range(4)] + [self.set_of_molecules_validation.num_of_molecules, min(molecules_num_of_atoms_validation), max(molecules_num_of_atoms_validation), mean(molecules_num_of_atoms_validation)]]
-        counter_bonds_parameterization = Counter()
-        for molecule in self.set_of_molecules_parameterization.molecules:
-            counter_bonds_parameterization.update(molecule.bonds_representation)
+def _write_html_par(output_html_file: str,
+                    correlation_graphs: bk.models.widgets.Tabs,
+                    loc_min_graph: figure,
+                    stats_par: namedtuple,
+                    stats_val: namedtuple,
+                    set_of_mols: SetOfMolecules,
+                    par_info: list,
+                    params_file: str):
 
-        counter_bonds_validation = Counter()
-        for molecule in self.set_of_molecules_validation.molecules:
-            counter_bonds_validation.update(molecule.bonds_representation)
-        self.bonds_data = [(bond.replace("-", "  "), count_parameterization, counter_bonds_validation[bond]) for bond, count_parameterization in counter_bonds_parameterization.most_common()]
-        print(colored("ok\n", "green"))
-
-    def graphs(self):
-        print("Creating graphs...")
-        type_color = {"C": Reds[256], "O": Greens[256], "H": Blues[256], "N": Greys[256]}
-        colors = {}
-        for element in sorted(list(set([x.split("~")[0].split("/")[0] for x in self.atomic_types]))):
-            element_atomic_types = [x for x in self.atomic_types if x.split("~")[0].split("/")[0] == element]
-            for index, element_atomic_type in enumerate(element_atomic_types, 1):
-                try:
-                    if element_atomic_type[0] == "S":
-                        colors[element_atomic_type] = ["#FF00FF", "#FF33FF", "#FF66FF", "#FF99FF"][index - 1]
-                    else:
-                        colors[element_atomic_type] = type_color[element][int(200 / (len(element_atomic_types) + 1)) * index]
-                except KeyError:
-                    exit(colored("Error! No color defined for atomic type {}.".format(atomic_symbol), "red"))
-
-        tooltips = [("Atomic type", "$name"),
-                    ("Reference charge", "@ref_charges"),
-                    ("Empirical charge", "@emp_charges"),
-                    ("Molecule", "@molecules"),
-                    ("Index", "@indices")]
-
-        correlation_graph = figure(plot_width=900,
-                                   plot_height=900,
-                                   title="Correlation graph",
-                                   x_axis_label="Reference charges",
-                                   y_axis_label="Empirical charges",
-                                   output_backend="webgl",
-                                   tooltips=tooltips)
-        correlation_graph.toolbar.active_inspect = None
-
-        correlation_graph.title.align = "center"
-        correlation_graph.title.text_font_size = "17pt"
-        correlation_graph.xaxis.axis_label_text_font_size = "25px"
-        correlation_graph.yaxis.axis_label_text_font_size = "25px"
-        correlation_graph.axis.major_label_text_font_size = '20px'
-        correlation_graph.line([-1000, 1000], [-1000, 1000])
-        legends_p = [[] for _ in range(len(self.set_of_molecules.ref_atomic_types_charges.items()) // 27 + 1)]
-
-        source_molecules = defaultdict(list)
-        source_indices = defaultdict(list)
-        for molecule in self.set_of_molecules.molecules:
-            for index, symbol in enumerate(molecule.atoms_representation, start=1):
-                source_molecules[symbol].append(molecule.name)
-                source_indices[symbol].append(index)
-
-        for index, atomic_symbol in enumerate(self.atomic_types):
-            color = colors[atomic_symbol]
-            oc = correlation_graph.circle("ref_charges",
-                                          "emp_charges",
-                                          size=6,
-                                          fill_color=color,
-                                          line_color=color,
-                                          name=atomic_symbol,
-                                          source=ColumnDataSource(data=dict(emp_charges=self.set_of_molecules.emp_atomic_types_charges[atomic_symbol],
-                                                                            ref_charges=self.set_of_molecules.ref_atomic_types_charges[atomic_symbol],
-                                                                            indices=source_indices[atomic_symbol],
-                                                                            molecules=source_molecules[atomic_symbol])))
-            legends_p[index // 27].append((atomic_symbol, [oc]))
-
-        plot_width = 944
-        rmsd_pearson_labels_x = [577, 630]
-        par_val_comparison_width = 994
-        print(self.atomic_types)
-        if "/" not in list(self.atomic_types)[0]:
-            label_width = 50
-        else:
-            label_width = 130
-            plot_width += 42
-            par_val_comparison_width += 252
-
-        for x in range(len(self.atomic_types) // 27 + 1):
-            correlation_graph.add_layout(Legend(items=legends_p[x], label_width=label_width, label_height=25, margin=0, label_text_font_size="19px"), "left")
-            plot_width += label_width
-        correlation_graph.legend.click_policy = "hide"
-        correlation_graph.plot_width = plot_width
-
-        rmsd_label = Label(x=rmsd_pearson_labels_x[0], y=35, x_units='screen', y_units='screen',
-                           text='RMSD: {}'.format(self.all_atoms_data[0]), render_mode='css', text_font_size="25px")
-        pearson_label = Label(x=rmsd_pearson_labels_x[1], y=11, x_units='screen', y_units='screen',
-                              text="R²: {}".format(self.all_atoms_data[3]), render_mode='css', text_font_size="25px")
-        correlation_graph.add_layout(rmsd_label)
-        correlation_graph.add_layout(pearson_label)
-
-        max_charge = max((max(self.set_of_molecules.ref_charges), max(self.set_of_molecules.emp_charges)))
-        min_charge = min((min(self.set_of_molecules.ref_charges), min(self.set_of_molecules.emp_charges)))
-        corr = (max_charge - min_charge) / 10
-        min_charge -= corr
-        max_charge += corr
-        correlation_graph.x_range = Range1d(min_charge, max_charge)
-        correlation_graph.y_range = Range1d(min_charge, max_charge)
-        if self.set_of_molecules_parameterization:
-
-            source_molecules_v = defaultdict(list)
-            source_indices_v = defaultdict(list)
-            for molecule in self.set_of_molecules_validation.molecules:
-                for index, symbol in enumerate(molecule.atoms_representation, start=1):
-                    source_molecules_v[symbol].append(molecule.name)
-                    source_indices_v[symbol].append(index)
-
-            correlation_graph_validation = figure(plot_width=900,
-                                                  plot_height=900,
-                                                  title="Correlation graph - validation",
-                                                  x_axis_label="Reference charges",
-                                                  y_axis_label="Empirical charges",
-                                                  output_backend="webgl",
-                                                  tooltips=tooltips)
-            correlation_graph_validation.toolbar.active_inspect = None
-            correlation_graph_validation.title.align = "center"
-            correlation_graph_validation.title.text_font_size = "17pt"
-            correlation_graph_validation.xaxis.axis_label_text_font_size = "25px"
-            correlation_graph_validation.yaxis.axis_label_text_font_size = "25px"
-            correlation_graph_validation.axis.major_label_text_font_size = '20px'
-            correlation_graph_validation.line([-1000, 1000], [-1000, 1000])
-            legends_v = [[] for _ in range(len(self.atomic_types) // 27 + 1)]
-            missed_types = 0
-            for index, atomic_symbol in enumerate(self.atomic_types):
-                color = colors[atomic_symbol]
-                # try ... except construct is necessary, because validation set dont have to contain all atomic types contained in parameterization set
-                try:
-                    ref_charges = self.set_of_molecules_validation.ref_atomic_types_charges[atomic_symbol]
-                    emp_charges = self.set_of_molecules_validation.emp_atomic_types_charges[atomic_symbol]
-                except KeyError:
-                    missed_types += 1
-                    continue
-
-                ov = correlation_graph_validation.circle("ref_charges",
-                                                         "emp_charges",
-                                                         size=6,
-                                                         fill_color=color,
-                                                         line_color=color,
-                                                         name=atomic_symbol,
-                                                         source=ColumnDataSource(data=dict(emp_charges=emp_charges,
-                                                                                           ref_charges=ref_charges,
-                                                                                           indices=source_indices_v[atomic_symbol],
-                                                                                           molecules=source_molecules_v[atomic_symbol])))
-                legends_v[(index - missed_types) // 27].append((atomic_symbol, [ov]))
-
-            for x in range(len(self.atomic_types) // 27 + 1):
-                correlation_graph_validation.add_layout(Legend(items=legends_v[x], label_width=label_width, label_height=25, margin=0, label_text_font_size="19px"), "left")
-            correlation_graph_validation.legend.click_policy = "hide"
-            correlation_graph_validation.plot_width = plot_width
-
-            rmsd_label = Label(x=rmsd_pearson_labels_x[0], y=35, x_units='screen', y_units='screen',
-                               text='RMSD: {}'.format(self.atoms_data_validation[0]), render_mode='css', text_font_size="25px")
-            pearson_label = Label(x=rmsd_pearson_labels_x[1], y=11, x_units='screen', y_units='screen',
-                                  text="R²: {}".format(self.atoms_data_validation[3]), render_mode='css', text_font_size="25px")
-            correlation_graph_validation.add_layout(rmsd_label)
-            correlation_graph_validation.add_layout(pearson_label)
-
-            correlation_graph_validation.x_range = Range1d(min_charge, max_charge)
-            correlation_graph_validation.y_range = Range1d(min_charge, max_charge)
-
-            par_val_comparison = figure(plot_width=par_val_comparison_width,
-                                        plot_height=900,
-                                        title="Correlation graph - validation",
-                                        x_axis_label="Reference charges",
-                                        y_axis_label="Empirical charges",
-                                        output_backend="webgl")
-            par_val_comparison.title.align = "center"
-            par_val_comparison.title.text_font_size = "17pt"
-            par_val_comparison.xaxis.axis_label_text_font_size = "25px"
-            par_val_comparison.yaxis.axis_label_text_font_size = "25px"
-            par_val_comparison.axis.major_label_text_font_size = '20px'
-            par_val_comparison.line([-1000, 1000], [-1000, 1000])
-            par_val_comparison.circle(self.set_of_molecules_parameterization.ref_charges, self.set_of_molecules_parameterization.emp_charges, size=6, legend="Parameterization", fill_color="black", line_color="black")
-            par_val_comparison.circle(self.set_of_molecules_validation.ref_charges, self.set_of_molecules_validation.emp_charges, size=6, legend="Validation", fill_color="red", line_color="red")
-            par_val_comparison.legend.location = "top_left"
-            par_val_comparison.legend.click_policy = "hide"
-            par_val_comparison.x_range = Range1d(min_charge, max_charge)
-            par_val_comparison.y_range = Range1d(min_charge, max_charge)
-            self.correlation_graph_html_source = Tabs(tabs=[Panel(child=correlation_graph, title="Parameterization"), Panel(child=correlation_graph_validation, title="Validation"), Panel(child=par_val_comparison, title="Comparison")])
-        else:
-            self.correlation_graph_html_source = correlation_graph
-        print(colored("ok\n", "green"))
-
-    def write_html_comparison(self):
-        print("Writing html file...")
-        ref_chg_file = path.basename(self.set_of_molecules.ref_chg_file)
-        emp_chg_file = path.basename(self.set_of_molecules.emp_chg_file)
-        copyfile(self.set_of_molecules.emp_chg_file, path.join(self.data_dir, ref_chg_file))
-        copyfile(self.set_of_molecules.ref_chg_file, path.join(self.data_dir, emp_chg_file))
-        script, correlation_graph = components(self.correlation_graph_html_source)
-        output_file = path.join(self.data_dir, self.output_file)
-        with open(output_file, "w") as html_file:
-            html_file.write(open("modules/html_patterns/pattern_comparison.txt").read().format(
-                script, INLINE.render(),
-                "</td><td>\n".join([str(item) for item in self.all_atoms_data]),
-                "</td><td>\n".join([str(item) for item in self.molecules_data]),
-                "".join(["\n<tr style=\"background-color: {};\"><td>".format(background_color(atomic_type[1])) + "</td><td>".join([str(item) for item in atomic_type]) + "</td></tr>" for atomic_type in self.atomic_types_data]),
-                correlation_graph, emp_chg_file, emp_chg_file, ref_chg_file, ref_chg_file))
-        print(colored("ok\n", "green"))
-        view(output_file)
-
-    def write_html_parameterization(self, output_file, sdf_file, emp_chg_file, ref_chg_file, summary_lines, parameters_json):
-        print("Writing html file...")
-        (script, (correlation_graph)) = components((self.correlation_graph_html_source))
-        with open(output_file, "w") as html_file:
-            html_file.write(open("modules/html_patterns/pattern_parameterization.txt").read().format(
-                script, INLINE.render(),
-                "</td><td>\n".join([str(item) for item in self.all_atoms_data]),
-                "</td><td>\n".join([str(item) for item in self.atoms_data_validation]),
-                "</td><td>\n".join([str(item) for item in self.molecules_data_parameterization]),
-                "</td><td>\n".join([str(item) for item in self.molecules_data_validation]),
-                "".join(["\n<tr style=\"background-color: {};\"><td>".format(background_color(atomic_type[1])) + "</td><td>".join([str(item) for item in atomic_type]) + "</td></tr>" for atomic_type in self.atomic_types_data_parameterization]),
-                "".join(["\n<tr style=\"background-color: {};\"><td>".format(background_color(atomic_type[1])) + "</td><td>".join([str(item) for item in atomic_type]) + "</td></tr>" for atomic_type in self.atomic_types_data_validation]),
-                correlation_graph,
-                "".join(["\n<tr><td>" + "</td><td>".join([str(item) for item in bond_type]) + "</td></tr>" for bond_type in self.bonds_data]),
-                "</br>\n".join(["<b>" + line.replace(": ", "</b>: ") for line in summary_lines]),
-                parameters_json, sdf_file, sdf_file, emp_chg_file, emp_chg_file, ref_chg_file, ref_chg_file))
-        print(colored("ok\n", "green"))
-        view(output_file)
+    par_info.insert(2, f"Memory usage: {int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1000)}MB")
+    script, (correlation_graphs_html_source, loc_min_graph) = bk.embed.components((correlation_graphs, loc_min_graph))
+    with open(output_html_file, "w") as html_file:
+        html_file.write(open("modules/html_patterns/pattern_parameterization.txt").read().format(
+            script, bk.resources.INLINE.render(),
+            "</td><td>\n".join([str(item) for item in stats_par.all_ats]),
+            "</td><td>\n".join([str(item) for item in stats_val.all_ats]),
+            "</td><td>\n".join([str(item) for item in stats_par.mols]),
+            "</td><td>\n".join([str(item) for item in stats_val.mols]),
+            "".join([f"\n<tr style=\"background-color: {_background_color(at_type[1])};\"><td>" +
+                     "</td><td>".join([str(item) for item in at_type]) + "</td></tr>" for at_type in stats_par.ats_types]),
+            "".join([f"\n<tr style=\"background-color: {_background_color(at_type[1])};\"><td>" +
+                     "</td><td>".join([str(item) for item in at_type]) + "</td></tr>" for at_type in stats_val.ats_types]),
+            correlation_graphs_html_source,
+            "".join(["\n<tr><td>" + "</td><td>".join([bond_type, str(count_par), str(stats_val.bonds[bond_type])]) +
+                     "</td></tr>" for (bond_type, count_par) in stats_par.bonds.items()]),
+            loc_min_graph,
+            "</br>\n".join(["<b>" + line.replace(": ", "</b>: ") for line in par_info]),
+            *_format_input_file(set_of_mols.sdf_file),
+            *_format_input_file(set_of_mols.ref_chgs_file),
+            *_format_input_file(params_file)))
+    bk.util.browser.view(output_html_file)
