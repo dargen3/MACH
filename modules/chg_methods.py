@@ -49,12 +49,13 @@ class ChargeMethod:
             for key, vals in self.params["atom"]["data"].items():
                 if key.split("/")[0] == at.split("/")[0]:
                     self.params["atom"]["data"][at] = vals
-                    print(colored(f"    Atom type {at} was added to parameters. Parameters derived from {key}", "yellow"))
+                    print(colored(f"    Atom type {at} was added to parameters. "
+                                  f"Parameters derived from {key}", "yellow"))
                     break
             else:
                 self.params["atom"]["data"][at] = [np.random.random() for _ in range(len(self.params["atom"]["names"]))]
                 print(colored(f"    Atom type {at} was added to parameters. Parameters are random numbers.", "yellow"))
-        # unused atoms are atomic types which are in parameters but not in set of mols
+        # unused atoms are atomic types which are in parameters but not in set of molecules
         unused_at = set(self.params["atom"]["data"].keys()) - set(set_of_molecules.ats_types)
         for at in unused_at:
             del self.params["atom"]["data"][at]
@@ -65,17 +66,19 @@ class ChargeMethod:
         if "bond" in self.params:
             missing_bonds = set(set_of_molecules.bonds_types) - set(self.params["bond"]["data"].keys())
             for bond in missing_bonds:
-                nat1, nat2, ntype = bond.split("-")
+                mat1, mat2, mtype = [value.split("/")[0] for value in bond.split("-")]
                 for key, val in self.params["bond"]["data"].items():
-                    pat1, pat2, ptype = key.split("-")
-                    if pat1.split("/")[0] == nat1.split("/")[0] and pat2.split("/")[0] == nat2.split("/")[0] and ptype.split("/")[0] == ntype.split("/")[0]:
+                    pat1, pat2, ptype = [value.split("/")[0] for value in key.split("-")]
+                    if (pat1, pat2, ptype) == (mat1, mat2, mtype):
                         self.params["bond"]["data"][bond] = val
-                        print(colored(f"    Bond type {bond} was added to parameters. Parameter derived from {key}", "yellow"))
+                        print(colored(f"    Bond type {bond} was added to parameters. "
+                                      f"Parameter derived from {key}", "yellow"))
                         break
                 else:
                     self.params["bond"]["data"][bond] = np.random.random()
-                    print(colored(f"    Bond type {bond} was added to parameters. Parameter is random numbers.", "yellow"))
-            # unused bonds are bond types which are in parameters but not in set of mols
+                    print(colored(f"    Bond type {bond} was added to parameters. "
+                                  f"Parameter is random numbers.", "yellow"))
+            # unused bonds are bond types which are in parameters but not in set of molecules
             unused_bonds = set(self.params["bond"]["data"].keys()) - set(set_of_molecules.bonds_types)
             for bond in unused_bonds:
                 del self.params["bond"]["data"][bond]
@@ -154,7 +157,6 @@ def eem_calculate(set_of_molecules, params):
         vector[-1] = molecule.total_charge
         results[index: new_index] = np.linalg.solve(matrix, vector)[:-1]
         index = new_index
-
     return results
 
 
@@ -183,7 +185,9 @@ def qeq_calculate(set_of_molecules, params, num_of_at_types):
         for i, parameter_index_i in enumerate(molecule.ats_ids):
             matrix[i, i] = params[parameter_index_i + 1]
             vector[i] = -params[parameter_index_i]
-            for j, (parameter_index_j, distance) in enumerate(zip(molecule.ats_ids[i + 1:], molecule.distance_matrix[i, i + 1:]), i + 1):
+            for j, (parameter_index_j, distance) in enumerate(zip(molecule.ats_ids[i + 1:],
+                                                                  molecule.distance_matrix[i, i + 1:]),
+                                                              i + 1):
                 matrix[i, j] = matrix[j, i] = erf(rad_vals[parameter_index_i, parameter_index_j] * distance) / distance
         vector[-1] = molecule.total_charge
         results[index: new_index] = np.linalg.solve(matrix, vector)[:-1]
@@ -222,7 +226,9 @@ def eqeq_calculate(set_of_molecules, params, num_of_at_types):
         for i, parameter_index_i in enumerate(molecule.ats_ids):
             matrix[i, i] = J_vals[parameter_index_i]
             vector[i] = -X_vals[parameter_index_i]
-            for j, (parameter_index_j, distance) in enumerate(zip(molecule.ats_ids[i + 1:], molecule.distance_matrix[i, i + 1:]), i + 1):
+            for j, (parameter_index_j, distance) in enumerate(zip(molecule.ats_ids[i + 1:],
+                                                                  molecule.distance_matrix[i, i + 1:]),
+                                                              i + 1):
                 a = a_vals[parameter_index_i, parameter_index_j]
                 overlap = np.exp(-a * a * distance**2) * (2 * a - a * a * distance - 1 / distance)
                 matrix[i, j] = matrix[j, i] = lambda_parameter * k_parameter / 2 * (1 / distance + overlap)
@@ -263,7 +269,9 @@ def sqe_calculate(set_of_molecules, params, num_of_at_types):
             list_of_hardness[i] = params[parameter_index_i + 1]
             vector[i] = -params[parameter_index_i]
             list_of_q0[i] = params[parameter_index_i + 3]
-            for j, (parameter_index_j, distance) in enumerate(zip(molecule.ats_ids[i + 1:], molecule.distance_matrix[i, i + 1:]), i + 1):
+            for j, (parameter_index_j, distance) in enumerate(zip(molecule.ats_ids[i + 1:],
+                                                                  molecule.distance_matrix[i, i + 1:]),
+                                                              i + 1):
                 d0 = multiplied_widths[parameter_index_i, parameter_index_j]
                 matrix[i, j] = matrix[j, i] = erf(distance / d0) / distance
         vector -= np.dot(matrix, list_of_q0)

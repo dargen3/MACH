@@ -3,7 +3,7 @@ from importlib import import_module
 from numpy import linalg
 from termcolor import colored
 
-from .input_output import control_and_copy_input_files
+from .control_input import control_and_copy_input_files
 from .set_of_molecules import create_set_of_mols, create_method_data, write_chgs_to_file
 
 

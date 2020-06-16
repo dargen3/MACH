@@ -10,8 +10,8 @@ from scipy.optimize import minimize
 from termcolor import colored
 
 from .comparison import comparison_par
-from .input_output import control_and_copy_input_files
-from .set_of_molecules import SetOfMolecules, create_set_of_mols, create_method_data, create_par_val_set, add_chgs_to_set_of_mols, write_chgs_to_file
+from .control_input import control_and_copy_input_files
+from .set_of_molecules import *
 from .chg_methods import ChargeMethod
 
 
@@ -92,12 +92,10 @@ def objective_function(params: np.array,
                        set_of_mols: SetOfMolecules,
                        obj_vals: list = None) -> float:
 
-    def _rmsd_calculation(set_of_mols: SetOfMolecules,
-                          emp_chg: np.array,
-                          ats_types: list):
+    def _rmsd_calculation(emp_chg: np.array) -> tuple:
 
-        ats_types_rmsd = np.empty(len(ats_types))
-        for index, symbol in enumerate(ats_types):
+        ats_types_rmsd = np.empty(len(chg_method.ats_types))
+        for index, symbol in enumerate(chg_method.ats_types):
             differences = emp_chg[set_of_mols.all_ats_ids == index * chg_method.params_per_at_type] - set_of_mols.ref_ats_types_chgs[symbol]
             ats_types_rmsd[index] = np.sqrt(np.mean(np.abs(differences) ** 2))
         total_mols_rmsd = 0
@@ -115,7 +113,7 @@ def objective_function(params: np.array,
     except (np.linalg.LinAlgError, ZeroDivisionError):
         return 1000
 
-    ats_types_rmsd, rmsd = _rmsd_calculation(set_of_mols, emp_chgs, chg_method.ats_types)
+    ats_types_rmsd, rmsd = _rmsd_calculation(emp_chgs)
     print("    Total RMSD: {}    Worst RMSD: {}".format(str(rmsd)[:8], str(np.max(ats_types_rmsd))[:8]), end="\r")
     objective_val = rmsd + np.mean(ats_types_rmsd)
     if isinstance(obj_vals, list):
@@ -134,7 +132,7 @@ def parameterize(sdf_file: str,
                  minimization_method: str,
                  num_of_samples: int,
                  num_of_candidates: int,
-                 par_subset: int,
+                 subset: int,
                  data_dir: str,
                  rewriting_with_force: bool,
                  git_hash: str = None):
@@ -151,7 +149,7 @@ def parameterize(sdf_file: str,
     chg_method.prepare_params_for_par(set_of_mols)
     add_chgs_to_set_of_mols(set_of_mols, ref_chgs_file, "ref_chgs")
     set_of_mols_par, set_of_mols_val = create_par_val_set(set_of_mols,
-                                                          par_subset,
+                                                          subset,
                                                           chg_method)
 
     print("Preprocessing data...")
@@ -204,4 +202,5 @@ def parameterize(sdf_file: str,
                              f"Command: {' '.join(argv)}",
                              f"Number of parameters: {len(chg_method.params_vals)}",
                              f"Objective function evaluations: {par_results.obj_evals}",
-                             f"Github commit hash: <a href = \"https://github.com/dargen3/MACH/commit/{git_hash}\">{git_hash}</a></div>"])
+                             f"Github commit hash: "
+                             f"<a href = \"https://github.com/dargen3/MACH/commit/{git_hash}\">{git_hash}</a></div>"])

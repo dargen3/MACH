@@ -15,11 +15,13 @@ def load_arguments():
                                  "set_of_molecules_info", "comparison",
                                  "parameterization_meta"))
     parser.add_argument("--ats_types_pattern",
-                        help="Use for comparison and set_of_molecules only. Argument defines used atomic classifier.",
+                        help="Use for comparison and set_of_molecules only. "
+                             "Define used atomic classifier.",
                         choices=("plain", "hbo", "plain-ba", "plain-ba-sb"),
                         default="plain")
     parser.add_argument("--cpu",
-                        help="Use for \"guided minimization\" optimization method only. Define number of used CPU for parameterization.",
+                        help="Use for \"guided minimization\" optimization method only. "
+                             "Define number of used CPU for parameterization.",
                         default=1,
                         type=int)
     parser.add_argument("--data_dir",
@@ -39,37 +41,45 @@ def load_arguments():
                         help="Minimization method for parameterization.",
                         default="SLSQP")
     parser.add_argument("--num_of_candidates",
-                        help="Use for \"guided minimization\" optimization method only. Define number of used candidates.",
+                        help="Use for \"guided minimization\" optimization method only. "
+                             "Define number of used candidates.",
                         default=30,
                         type=int)
     parser.add_argument("--num_of_samples",
-                        help="Use for \"guided minimization\" optimization method only. Define number of used initial samples.",
+                        help="Use for \"guided minimization\" optimization method only. "
+                             "Define number of used initial samples.",
                         default=500000,
                         type=int)
     parser.add_argument("--optimization_method",
                         help="Optimization method for parameterization.",
                         choices=("local_minimization", "guided_minimization"),
                         default="guided_minimization")
-    parser.add_argument("--par_subset",
-                        help="Use for parameterization mode only. Minimal subset of mols that contains n atoms of each atom type is used for parameterization. Other mols are used for validation.",
+    parser.add_argument("--subset",
+                        help="Use for parameterization mode only. "
+                             "Minimal subset of molecules that contains n atoms of each atom type "
+                             "is used for parameterization. Other molecules are used for validation.",
                         default=100,
                         type=int)
     parser.add_argument("--params_file",
                         help="File with parameters.")
     parser.add_argument("--RAM",
-                        help="Use for parameterization_meta and calculation_meta modes only. Define maximum RAM usage for META job in GB.",
+                        help="Use for parameterization_meta mode only. "
+                             "Define maximum RAM usage for META job in GB.",
                         default=10,
                         type=int)
     parser.add_argument("--random_seed",
-                        help="Use for parameterization mode only. Set initial random state to guarantee reproduction of chgs. Set 0 for full random parameterization.",
+                        help="Use for parameterization mode only. "
+                             "Set initial random state to guarantee reproduction of charges. "
+                             "Set 0 for fully random parameterization.",
                         default=1,
                         type=int)
     parser.add_argument("--ref_chgs_file",
                         help="File with reference charges.")
     parser.add_argument("--sdf_file",
-                        help="Sdf file with mols.")
+                        help="Sdf file with molecules.")
     parser.add_argument("--walltime",
-                        help="Use for parameterization_meta and calculation_meta modes only. Define maximum time for META job in hours.",
+                        help="Use for parameterization_meta mode only. "
+                             "Define maximum time for META job in hours.",
                         default=24,
                         type=int)
 
@@ -106,8 +116,8 @@ def load_arguments():
         if not args.git_hash:
             args.git_hash = git.Repo(search_parent_directories=True).head.object.hexsha
 
-    if args.par_subset < 1:
-        parser.error("Error! par_subset value must be higher then 0!")
+    if args.subset < 1:
+        parser.error("Error! subset value must be higher then 0!")
 
     print(colored("ok\n", "green"))
     return args

@@ -13,7 +13,7 @@ def parameterization_meta(sdf_file: str,
                           minimization_method: str,
                           num_of_samples: int,
                           num_of_candidates: int,
-                          par_subset: int,
+                          subset: int,
                           cpu: int,
                           RAM: int,
                           walltime: int,
@@ -26,7 +26,9 @@ def parameterization_meta(sdf_file: str,
            f"mkdir {data_dir}; "
            f"mkdir {data_dir}/input_files; "
            f"mkdir {data_dir}/output_files'")
-    system(f"scp {sdf_file} {ref_chgs_file} {params_file} dargen3@tarkil.metacentrum.cz:/storage/praha1/home/dargen3/mach/{data_dir}/input_files")
+
+    system(f"scp {sdf_file} {ref_chgs_file} {params_file} "
+           f"dargen3@tarkil.metacentrum.cz:/storage/praha1/home/dargen3/mach/{data_dir}/input_files")
     print(colored("ok\n", "green"))
 
     params_file = basename(params_file)
@@ -45,10 +47,14 @@ def parameterization_meta(sdf_file: str,
               f"--cpu {cpu} " \
               f"--git_hash {git.Repo(search_parent_directories=True).head.object.hexsha} " \
               f"--num_of_samples {num_of_samples} " \
-              f"--par_subset {par_subset} " \
+              f"--subset {subset} " \
               f"--num_of_candidates {num_of_candidates} " \
               f"--random_seed {random_seed}"
 
     print("Submitting job in planning system...")
-    system(f"""ssh dargen3@nympha.metacentrum.cz "export PBS_SERVER=cerit-pbs.cerit-sc.cz; cd /storage/praha1/home/dargen3/mach/para_submit; ./para_submit.sh '{command}' {data_dir} -l select=1:ncpus={cpu}:mem={RAM}gb:scratch_local={RAM}gb -l walltime={walltime}:00:00" """)
+    system(f"ssh dargen3@nympha.metacentrum.cz "
+           f"\"export PBS_SERVER=cerit-pbs.cerit-sc.cz; "
+           f"cd /storage/praha1/home/dargen3/mach/para_submit; "
+           f"./para_submit.sh '{command}' {data_dir} -l "
+           f"select=1:ncpus={cpu}:mem={RAM}gb:scratch_local={RAM}gb -l walltime={walltime}:00:00\" ")
     print(colored("ok\n", "green"))

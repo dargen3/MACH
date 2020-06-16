@@ -6,7 +6,7 @@ import numpy as np
 from bokeh.plotting import figure
 from termcolor import colored
 
-from .input_output import control_and_copy_input_files
+from .control_input import control_and_copy_input_files
 from .set_of_molecules import SetOfMolecules, create_set_of_mols, add_chgs_to_set_of_mols
 
 
@@ -97,26 +97,27 @@ def comparison_par(set_of_mols_par: SetOfMolecules,
     print(colored("ok\n", "green"))
 
 
+def _calculate_stats(ref_chgs: np.array,
+                     emp_chgs: np.array) -> namedtuple:
+
+    deviations = abs(ref_chgs - emp_chgs)
+    rmsd = round(np.sqrt((1.0 / deviations.size) * np.sum(deviations ** 2)), 4)
+    max_deviation = round(np.max(deviations), 4)
+    average_deviation = round(np.mean(deviations), 4)
+    pearson_2 = round(np.corrcoef(ref_chgs, emp_chgs)[0, 1] ** 2, 4)
+    return namedtuple("stats", ["rmsd",
+                                "max_deviation",
+                                "average_deviation",
+                                "pearson_2",
+                                "count"])(rmsd,
+                                          max_deviation,
+                                          average_deviation,
+                                          pearson_2,
+                                          deviations.size)
+
+
 def _stats(set_of_mols: SetOfMolecules,
            mols_log_file: str) -> namedtuple:
-
-    def _calculate_stats(ref_chgs: np.array,
-                         emp_chgs: np.array) -> namedtuple:
-
-        deviations = abs(ref_chgs - emp_chgs)
-        rmsd = round(np.sqrt((1.0 / deviations.size) * np.sum(deviations ** 2)), 4)
-        max_deviation = round(np.max(deviations), 4)
-        average_deviation = round(np.mean(deviations), 4)
-        pearson_2 = round(np.corrcoef(ref_chgs, emp_chgs)[0, 1] ** 2, 4)
-        return namedtuple("stats", ["rmsd",
-                                    "max_deviation",
-                                    "average_deviation",
-                                    "pearson_2",
-                                    "count"])(rmsd,
-                                              max_deviation,
-                                              average_deviation,
-                                              pearson_2,
-                                              deviations.size)
 
     all_ats_data = _calculate_stats(set_of_mols.ref_chgs, set_of_mols.emp_chgs)
 
@@ -131,10 +132,11 @@ def _stats(set_of_mols: SetOfMolecules,
 
     mols_data = np.round([_calculate_stats(mol.ref_chgs, mol.emp_chgs) for mol in set_of_mols.mols], 4)
     with open(mols_log_file, "w") as mols_log_file:
-        mols_log_file.write("name, atomic types, rmsd, maximum deviation, average deviation, pearson**2, number of atoms\n")
+        mols_log_file.write("name, atomic types, rmsd, maximum deviation,"
+                            "average deviation, pearson**2, number of atoms\n")
         for mol, (rmsd, max_dev, av_dev, pearson, num_of_at) in zip(set_of_mols.mols, mols_data):
-            mols_log_file.write(
-                f"{mol.name}, {';'.join(set(mol.ats_srepr))}, {rmsd}, {max_dev}, {av_dev}, {pearson}, {int(num_of_at)}\n")
+            mols_log_file.write(f"{mol.name}, {';'.join(sorted(set(mol.ats_srepr)))}, {rmsd}, "
+                                f"{max_dev}, {av_dev}, {pearson}, {int(num_of_at)}\n")
     mols_num_of_at = [mol.num_of_ats for mol in set_of_mols.mols]
     averaged_mols_data = [*[round(np.mean(mols_data[:, y]), 4) for y in range(4)],
                           set_of_mols.num_of_mols,
@@ -359,7 +361,8 @@ def _write_html_comparison(set_of_mols: SetOfMolecules,
             "".join([f"\n<tr style=\"background-color: {_background_color(at_type[1])};\"><td>" +
                      "</td><td>".join([str(item) for item in at_type]) + "</td></tr>" for at_type in stats.ats_types]),
             correlation_graph_html_source[0],
-            "".join(["\n<tr><td>" + "</td><td>".join([str(item) for item in bond_type]) + "</td></tr>" for bond_type in stats.bonds.items()]),
+            "".join(["\n<tr><td>" + "</td><td>".join([str(item) for item in bond_type]) + "</td></tr>"
+                     for bond_type in stats.bonds.items()]),
             *_format_input_file(set_of_mols.sdf_file),
             *_format_input_file(set_of_mols.emp_chgs_file),
             *_format_input_file(set_of_mols.ref_chgs_file)))
@@ -385,9 +388,11 @@ def _write_html_par(output_html_file: str,
             "</td><td>\n".join([str(item) for item in stats_par.mols]),
             "</td><td>\n".join([str(item) for item in stats_val.mols]),
             "".join([f"\n<tr style=\"background-color: {_background_color(at_type[1])};\"><td>" +
-                     "</td><td>".join([str(item) for item in at_type]) + "</td></tr>" for at_type in stats_par.ats_types]),
+                     "</td><td>".join([str(item) for item in at_type]) + "</td></tr>"
+                     for at_type in stats_par.ats_types]),
             "".join([f"\n<tr style=\"background-color: {_background_color(at_type[1])};\"><td>" +
-                     "</td><td>".join([str(item) for item in at_type]) + "</td></tr>" for at_type in stats_val.ats_types]),
+                     "</td><td>".join([str(item) for item in at_type]) + "</td></tr>"
+                     for at_type in stats_val.ats_types]),
             correlation_graphs_html_source,
             "".join(["\n<tr><td>" + "</td><td>".join([bond_type, str(count_par), str(stats_val.bonds[bond_type])]) +
                      "</td></tr>" for (bond_type, count_par) in stats_par.bonds.items()]),

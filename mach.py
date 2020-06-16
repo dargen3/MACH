@@ -46,7 +46,7 @@ if __name__ == '__main__':
                      args.minimization_method,
                      args.num_of_samples,
                      args.num_of_candidates,
-                     args.par_subset,
+                     args.subset,
                      args.data_dir,
                      args.rewriting_with_force,
                      args.git_hash)
@@ -70,10 +70,9 @@ if __name__ == '__main__':
                               args.minimization_method,
                               args.num_of_samples,
                               args.num_of_candidates,
-                              args.par_subset,
+                              args.subset,
                               args.cpu,
                               args.RAM,
                               args.walltime,
                               args.random_seed,
                               args.data_dir)
-
