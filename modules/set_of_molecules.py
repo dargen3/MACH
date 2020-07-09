@@ -156,7 +156,7 @@ def create_set_of_mols(sdf_file: str,
                         np.array(bonds, dtype=np.int32),
                         bonds_srepr)
 
-    print(f"Loading of set of mols from {sdf_file}...")
+    print(f"Loading of set of molecules from {sdf_file}...")
     mols_data = [x.splitlines() for x in open(sdf_file, "r").read().split("$$$$\n")][:-1]
     mols = List([load_sdf(mol_data)
                  for mol_data in mols_data])
@@ -166,7 +166,7 @@ def create_set_of_mols(sdf_file: str,
                                  sdf_file,
                                  ats_types,  # prepsat po fixu
                                  bonds_types) # prepsat po fixu
-    print(f"    {set_of_mols.num_of_mols} mols was loaded.")
+    print(f"    {set_of_mols.num_of_mols} molecules was loaded.")
     print(colored("ok\n", "green"))
     return set_of_mols
 
@@ -180,7 +180,7 @@ def set_of_mols_info(sdf_file: str,
     print(f"File:                 {sdf_file}\n")
     print(f"Number of mols:  {set_of_mols.num_of_mols}")
     print(f"Atoms in mols:   {min(ats_in_mols)} - {max(ats_in_mols)}")
-    print(f"Number of atoms:      {set_of_mols.num_of_at}")
+    print(f"Number of atoms: {set_of_mols.num_of_ats}")
     print("\nAtomic types:")
     for at_type, number in Counter([at for mol in set_of_mols.mols for at in mol.ats_srepr]).most_common():
         print(f"    {at_type:>8}: {number:<11}")
@@ -203,18 +203,42 @@ def create_method_data(method: "ChargeMethod",
                                      dtype=np.int16) + len(method.params["atom"]["names"]) * len(method.ats_types)
 
     if "parameterization.py" in getmodule(stack()[1][0]).__file__:
-        _create_ats_types_chgs(set_of_mols, "ref_chgs")
+        _create_chgs_attr(set_of_mols, "ref_chgs")
         set_of_mols.all_ats_ids = np.array([at_id for molecule in set_of_mols.mols
                                             for at_id in molecule.ats_ids], dtype=np.int16)
 
+
+
+def create_80_20(set_of_mols: SetOfMolecules):  # smazat!!!
+    percent_index_80 = int((set_of_mols.num_of_mols/100)*80)
+    mols = np.random.permutation(set_of_mols.mols)
+    mols_80 = mols[:percent_index_80]
+    mols_20 = mols[percent_index_80:]
+
+    ats_types_80 = List(sorted(set([at for mol in mols_80 for at in mol.ats_srepr])))  # po fixu přepsat
+    bonds_types_80 = List(sorted(set([bond for mol in mols_80 for bond in mol.bonds_srepr])))  # po fixu přepsat
+    set_of_mols_80 = SetOfMolecules(List(mols_80), set_of_mols.sdf_file, ats_types_80, bonds_types_80)
+
+    set_of_mols_80.ref_chgs_file = set_of_mols.ref_chgs_file
+    set_of_mols_80.emp_chgs_file = set_of_mols.emp_chgs_file
+
+    ats_types_20 = List(sorted(set([at for mol in mols_20 for at in mol.ats_srepr])))  # po fixu přepsat
+    bonds_types_20 = List(sorted(set([bond for mol in mols_20 for bond in mol.bonds_srepr])))  # po fixu přepsat
+    set_of_mols_20 = SetOfMolecules(List(mols_20), set_of_mols.sdf_file, ats_types_20, bonds_types_20)
+
+    set_of_mols_20.ref_chgs_file = set_of_mols.ref_chgs_file
+    set_of_mols_20.emp_chgs_file = set_of_mols.emp_chgs_file
+
+    return set_of_mols_80, set_of_mols_20
 
 def create_par_val_set(set_of_mols: SetOfMolecules,
                        subset: int,
                        chg_method: "ChargeMethod") -> tuple:
 
-    def _create_subset_of_mols() -> SetOfMolecules:
+    def _create_subset_of_mols(subset: int) -> SetOfMolecules:
 
-        def _select_molecules(mols: List) -> list:
+        def _select_molecules(mols: List,
+                              subset: int) -> list:
 
             counter_at = Counter()
             subset_mols = []
@@ -226,8 +250,8 @@ def create_par_val_set(set_of_mols: SetOfMolecules,
                     break
             return subset_mols
 
-        subset_mols = _select_molecules(np.random.permutation(set_of_mols.mols))
-        subset_mols = _select_molecules(subset_mols[::-1])
+        subset_mols = _select_molecules(np.random.permutation(set_of_mols.mols), subset)
+        subset_mols = _select_molecules(subset_mols[::-1], subset)
 
         if "bond" in chg_method.params:
             counter_bonds = Counter()
@@ -254,11 +278,11 @@ def create_par_val_set(set_of_mols: SetOfMolecules,
         return subset_of_mol
 
     print("Creating validation and parameterization sets...")
-    set_of_mols_par = _create_subset_of_mols()
+    set_of_mols_par = _create_subset_of_mols(subset)
+    set_of_mols_min = _create_subset_of_mols(5)
     if len(set_of_mols_par.mols) == len(set_of_mols.mols):
-        exit(colored("Error! It is too small set of mols or too high --subset value.\n", "red"))
+        exit(colored("Error! It is too small set of molecules or too high --subset value.\n", "red"))
 
-    set_of_mols_par.sdf_file = set_of_mols.sdf_file
     set_of_mols_par.ref_chgs_file = set_of_mols.ref_chgs_file
     set_of_mols_par.emp_chgs_file = set_of_mols.emp_chgs_file
 
@@ -267,14 +291,16 @@ def create_par_val_set(set_of_mols: SetOfMolecules,
     ats_types_val = List(sorted(set([at for mol in mols_val for at in mol.ats_srepr]))) # po fixu přepsat
     bonds_types_val = List(sorted(set([bond for mol in mols_val for bond in mol.bonds_srepr])))  # po fixu přepsat
     set_of_mols_val = SetOfMolecules(mols_val, set_of_mols.sdf_file, ats_types_val, bonds_types_val)
-    print(f"    {set_of_mols_par.num_of_mols} mols in parameterization set.")
-    print(f"    {set_of_mols_val.num_of_mols} mols in validation set.")
+    print(f"    {set_of_mols_par.num_of_mols} molecules in parameterization set.")
+    print(f"    {set_of_mols_min.num_of_mols} molecules in minimum set.")
+    print(f"    {set_of_mols_val.num_of_mols} molecules in validation set.")
     print(colored("ok\n", "green"))
-    return set_of_mols_par, set_of_mols_val
+
+    return set_of_mols_par, set_of_mols_min, set_of_mols_val
 
 
-def _create_ats_types_chgs(set_of_mols: SetOfMolecules,
-                           type_of_chg: str):
+def _create_chgs_attr(set_of_mols: SetOfMolecules,
+                      type_of_chg: str):
 
     setattr(set_of_mols, type_of_chg, np.array([at_chg for mol in set_of_mols.mols
                                                 for at_chg in getattr(mol, type_of_chg)], dtype=np.float32))
@@ -288,9 +314,9 @@ def _create_ats_types_chgs(set_of_mols: SetOfMolecules,
     setattr(set_of_mols, f"{type_of_chg[:3]}_ats_types_chgs", numba_at_types_chg)
 
 
-def add_chgs_to_set_of_mols(set_of_mols: SetOfMolecules,
-                            chgs_file: str,
-                            type_of_chgs: str):
+def add_chgs(set_of_mols: SetOfMolecules,
+             chgs_file: str,
+             type_of_chgs: str):
 
     def _control_order_of_mol():
         print("    Control of order of molecules... ")
@@ -322,7 +348,7 @@ def add_chgs_to_set_of_mols(set_of_mols: SetOfMolecules,
         for mol_data, mol in zip(chgs_file.read().split("\n\n")[:-1], set_of_mols.mols):
             setattr(mol, type_of_chgs, np.array([float(line.split()[2])
                                                  for line in mol_data.splitlines()[2:]], dtype=np.float32))
-    _create_ats_types_chgs(set_of_mols, type_of_chgs)
+    _create_chgs_attr(set_of_mols, type_of_chgs)
     print(colored("ok\n", "green"))
 
 

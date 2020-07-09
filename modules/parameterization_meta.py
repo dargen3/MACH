@@ -10,7 +10,6 @@ def parameterization_meta(sdf_file: str,
                           chg_method: str,
                           params_file: str,
                           optimization_method: str,
-                          minimization_method: str,
                           num_of_samples: int,
                           num_of_candidates: int,
                           subset: int,
@@ -39,7 +38,6 @@ def parameterization_meta(sdf_file: str,
               f"--mode parameterization " \
               f"--chg_method {chg_method} " \
               f"--optimization_method {optimization_method} " \
-              f"--minimization_method {minimization_method} " \
               f"--params_file {params_file} " \
               f"--sdf_file {sdf_file} " \
               f"--ref_chgs_file {ref_chgs_file} " \

@@ -7,7 +7,7 @@ from bokeh.plotting import figure
 from termcolor import colored
 
 from .control_input import control_and_copy_input_files
-from .set_of_molecules import SetOfMolecules, create_set_of_mols, add_chgs_to_set_of_mols
+from .set_of_molecules import SetOfMolecules, create_set_of_mols, add_chgs
 
 
 def comparison(sdf_file: str,
@@ -22,8 +22,8 @@ def comparison(sdf_file: str,
                                  rewriting_with_force)
 
     set_of_mols = create_set_of_mols(sdf_file, ats_types_pattern)
-    add_chgs_to_set_of_mols(set_of_mols, emp_chgs_file, "emp_chgs")
-    add_chgs_to_set_of_mols(set_of_mols, ref_chgs_file, "ref_chgs")
+    add_chgs(set_of_mols, emp_chgs_file, "emp_chgs")
+    add_chgs(set_of_mols, ref_chgs_file, "ref_chgs")
 
     print("Calculation of statistical data...")
     stats = _stats(set_of_mols, f"{data_dir}/output_files/molecules.log")
@@ -250,18 +250,18 @@ def _comparison_corr_graph(set_of_mol_par: SetOfMolecules,
     graph.y_range = bk.models.Range1d(*graph_ranges)
 
     graph.line([-1000, 1000], [-1000, 1000])
-    graph.circle(set_of_mol_par.ref_chgs,
-                 set_of_mol_par.emp_chgs,
-                 size=6,
-                 legend="Parameterization",
-                 fill_color="black",
-                 line_color="black")
     graph.circle(set_of_mol_val.ref_chgs,
                  set_of_mol_val.emp_chgs,
                  size=6,
                  legend="Validation",
                  fill_color="red",
                  line_color="red")
+    graph.circle(set_of_mol_par.ref_chgs,
+                 set_of_mol_par.emp_chgs,
+                 size=6,
+                 legend="Parameterization",
+                 fill_color="black",
+                 line_color="black")
     graph.legend.location = "top_left"
     graph.legend.click_policy = "hide"
 
@@ -304,13 +304,15 @@ def _graph_loc_min(loc_min_courses: list) -> figure:
     graph.yaxis.axis_label_text_font_size = "25px"
     graph.axis.major_label_text_font_size = '20px'
     graph.x_range.start = 0
+    graph.y_range.start = 0
+    graph.y_range.end = 2
     graph.legend.location = "top_right"
     graph.legend.click_policy = "hide"
     pallete = bk.palettes.Category20[20]
     for index, course in enumerate(loc_min_courses):
         graph.line([x for x in range(len(course))],
                    course,
-                   color=pallete[index],
+                   color=pallete[index % 20],
                    line_width=3,
                    legend=str(index+1))
     return graph

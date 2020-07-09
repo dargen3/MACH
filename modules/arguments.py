@@ -37,9 +37,6 @@ def load_arguments():
     parser.add_argument("--chg_method",
                         help="Empirical method for calculation or parameterization partial atomic charges.",
                         choices=("EEM", "QEq", "SQE", "EQEq", "EQEqc"))
-    parser.add_argument("--minimization_method",
-                        help="Minimization method for parameterization.",
-                        default="SLSQP")
     parser.add_argument("--num_of_candidates",
                         help="Use for \"guided minimization\" optimization method only. "
                              "Define number of used candidates.",
@@ -52,8 +49,8 @@ def load_arguments():
                         type=int)
     parser.add_argument("--optimization_method",
                         help="Optimization method for parameterization.",
-                        choices=("local_minimization", "guided_minimization"),
-                        default="guided_minimization")
+                        choices=("local_minimization", "guided_minimization", "opt_guided_minimization", "differential_evolution"),
+                        default="opt_guided_minimization")
     parser.add_argument("--subset",
                         help="Use for parameterization mode only. "
                              "Minimal subset of molecules that contains n atoms of each atom type "
@@ -87,7 +84,7 @@ def load_arguments():
     args = parser.parse_args()
 
     if not args.data_dir:
-        args.data_dir = f"{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}_{args.mode}"
+        args.data_dir = f"{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}_{args.mode}_{args.chg_method}_{args.sdf_file.split('/')[-1][:-4]}"
 
     if args.mode == "set_of_molecules_info":
         if args.sdf_file is None:
@@ -109,9 +106,10 @@ def load_arguments():
     elif args.mode in ["parameterization", "parameterization_meta"]:
         if any(arg is None for arg in [args.sdf_file,
                                        args.ref_chgs_file,
-                                       args.chg_method]):
+                                       args.chg_method,
+                                       args.params_file]):
             parser.error("For parameterization mode choose --sdf_file, "
-                         "--ref_chgs_file and --chg_method.")
+                         "--ref_chgs_file, --chg_method and --params_file.")
 
         if not args.git_hash:
             args.git_hash = git.Repo(search_parent_directories=True).head.object.hexsha

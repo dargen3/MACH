@@ -16,64 +16,65 @@ from .chg_methods import ChargeMethod
 
 
 @jit(nopython=True, cache=True)
-def lhs(dimensionality: int,
-        samples: int,
-        high_bound: float,
-        low_bound: float) -> np.array:
+def lhs(num_samples: int,
+        bounds: np.array) -> np.array:
 
-    cut = np.linspace(0, 1, samples + 1).astype(np.float32)
-    u = np.zeros((samples, dimensionality), dtype=np.float32)
-    for x in range(samples):
-        u[x] += np.random.rand(dimensionality)
+    dimensionality = len(bounds)
+    cut = np.linspace(0, 1, num_samples + 1).astype(np.float32)
+    samples = np.zeros((num_samples, dimensionality), dtype=np.float32)
+    for x in range(num_samples):
+        samples[x] += np.random.rand(dimensionality)
     for j in range(dimensionality):
-        u[np.random.permutation(np.arange(samples)), j] = u[:, j] * cut[1] + cut[:samples]
-    for x in range(samples):
-        u[x] = u[x] * (high_bound - low_bound) + low_bound
-    return u
+        samples[np.random.permutation(np.arange(num_samples)), j] = samples[:, j] * cut[1] + cut[:num_samples]
+    for x in range(num_samples):
+        for y, (low_bound, high_bound) in enumerate(bounds):
+            samples[x][y] = samples[x][y] * (high_bound - low_bound) + low_bound
+    return samples
 
 
-def local_minimization(set_of_mols: SetOfMolecules,
+def local_minimization(set_of_mols_par: SetOfMolecules,
                        chg_method: ChargeMethod,
-                       minimization_method: str,
                        initial_params: np.array) -> namedtuple:
 
     loc_min_course = []
     res = minimize(objective_function,
                    initial_params,
-                   method=minimization_method,
-                   options={"maxiter": 1},
-                   bounds=[chg_method.bounds for _ in range(len(initial_params))],
-                   args=(chg_method, set_of_mols, loc_min_course))
+                   method="SLSQP",
+                   options={"maxiter": 1000000},
+                   bounds=chg_method.params_bounds,
+                   args=(chg_method, set_of_mols_par, loc_min_course))
     return namedtuple("chgs", ["params",
-                                  "obj_val",
-                                  "loc_min_courses",
-                                  "obj_evals"])(res.x,
-                                                res.fun,
-                                                [loc_min_course],
-                                                len(loc_min_course))
+                               "obj_val",
+                               "loc_min_courses",
+                               "obj_evals"])(res.x,
+                                             res.fun,
+                                             [loc_min_course],
+                                             len(loc_min_course))
 
 
-def guided_minimization(set_of_mols: SetOfMolecules,
-                        chg_method: ChargeMethod,
-                        num_of_samples: int,
-                        num_of_candidates: int,
-                        minimization_method: str) -> namedtuple:
+def opt_guided_minimization(set_of_mols_par: SetOfMolecules,
+                            set_of_mols_min: SetOfMolecules,
+                            chg_method: ChargeMethod,
+                            num_of_samples: int,
+                            num_of_candidates: int) -> namedtuple:
 
     print("    Sampling...")
-    samples = lhs(len(chg_method.params_vals), num_of_samples, *chg_method.bounds)
+    samples = lhs(num_of_samples, chg_method.params_bounds)
 
     print("    Calculating of objective function for samples...")
-    candidates_rmsd = [objective_function(sample, chg_method, set_of_mols) for sample in samples]
+    candidates_rmsd = [objective_function(sample, chg_method, set_of_mols_min) for sample in samples]
 
     print("\x1b[2K    Selecting candidates...")
-    main_candidates = samples[list(map(candidates_rmsd.index, nsmallest(num_of_candidates, candidates_rmsd)))]
+    best_50_candidates = samples[list(map(candidates_rmsd.index, nsmallest(50, candidates_rmsd)))] # num_of_candidates
+    best_50_candidates_rmsd = [objective_function(sample, chg_method, set_of_mols_par) for sample in best_50_candidates]
+    best_5_candidates = best_50_candidates[list(map(best_50_candidates_rmsd.index, nsmallest(5, best_50_candidates_rmsd)))]  # num_of_candidates
 
     print("    Local minimizating...")
     best_params = None
     best_obj_val = 1000000
     all_loc_min_course = []
-    for params in main_candidates:
-        opt_params, final_obj_val, loc_min_course, _ = local_minimization(set_of_mols, chg_method, minimization_method, params)
+    for params in best_5_candidates:
+        opt_params, final_obj_val, loc_min_course, _ = local_minimization(set_of_mols_par, chg_method, params)
         all_loc_min_course.append(loc_min_course[0])
         if final_obj_val < best_obj_val:
             best_params = opt_params
@@ -85,6 +86,161 @@ def guided_minimization(set_of_mols: SetOfMolecules,
                                                 best_obj_val,
                                                 all_loc_min_course,
                                                 num_of_samples + sum(len(course) for course in all_loc_min_course))
+
+
+
+
+def _local_minimization_nlopt(set_of_mols_80: SetOfMolecules,
+                              chg_method: ChargeMethod,
+                              input_parameters: np.array,
+                              steps: int):
+    import nlopt
+    nlopt.srand(1)
+    loc_min_course = []
+    opt = nlopt.opt("LN_NEWUOA_BOUND", len(input_parameters))
+    opt.set_min_objective(lambda x, grad: objective_function(x, chg_method, set_of_mols_80, loc_min_course))
+    opt.set_xtol_abs(1e-6)
+    opt.set_maxeval(steps)
+    opt.set_lower_bounds([x[0] for x in chg_method.params_bounds])
+    opt.set_upper_bounds([x[1] for x in chg_method.params_bounds])
+
+
+    # print(opt.get_lower_bounds())
+    # print(opt.get_upper_bounds())
+
+    # try:
+    res = opt.optimize(input_parameters)
+    # except:
+    #     print("\nERRROR\n")
+    #     return namedtuple("chgs", ["params",
+    #                            "obj_val",
+    #                            "loc_min_courses",
+    #                            "obj_evals"])(None,
+    #                                          1000000000000000000000000000000,
+    #                                          [],
+    #                                          0)
+    return namedtuple("chgs", ["params",
+                               "obj_val",
+                               "loc_min_courses",
+                               "obj_evals"])(res,
+                                             opt.last_optimum_value(),
+                                             [loc_min_course],
+                                             len(loc_min_course))
+
+
+def guided_minimization(set_of_mols_80: SetOfMolecules,
+                        num_of_samples: int,
+                        num_of_candidates: int,
+                        chg_method: ChargeMethod) -> namedtuple:
+
+    # num_of_samples : 1000
+    # num_of_candidates : 100
+    # beg_iterations : 1000
+    # end_interation : 3000
+
+    print("    Sampling...")
+    samples = lhs(num_of_samples, chg_method.params_bounds)
+
+    print("    Calculating of objective function for samples...")
+    candidates_rmsd = [objective_function(sample, chg_method, set_of_mols_80) for sample in samples]
+
+    print("\x1b[2K    Selecting candidates...")
+    main_candidates = samples[list(map(candidates_rmsd.index, nsmallest(num_of_candidates, candidates_rmsd)))]
+
+    print(f"\x1b[2K    Local minimizating of best {num_of_candidates} candidates...")
+    best_params = None
+    best_obj_val = 1000000
+    all_loc_min_course = []
+    best_local_index = None
+    for index, params in enumerate(main_candidates):
+        opt_params, final_obj_val, loc_min_course, _ = _local_minimization_nlopt(set_of_mols_80, chg_method, params, num_of_samples)
+        all_loc_min_course.append(loc_min_course[0])
+        if final_obj_val < best_obj_val:
+            best_params = opt_params
+            best_obj_val = final_obj_val
+            best_local_index = index
+
+    print(f"\x1b[2K    Local minimizating of best candidate...")
+    best_opt_params, best_opt_val, best_opt_loc_min_course, _ = _local_minimization_nlopt(set_of_mols_80, chg_method, best_params, 3*num_of_samples)
+    print([len(x) for x in all_loc_min_course])
+    all_loc_min_course[best_local_index].extend(best_opt_loc_min_course[0])
+    print([len(x) for x in all_loc_min_course])
+
+    return namedtuple("chgs", ["params",
+                               "obj_val",
+                               "loc_min_courses",
+                               "obj_evals"])(best_opt_params,
+                                             best_opt_val,
+                                             all_loc_min_course,
+                                             num_of_samples + sum(len(course) for course in all_loc_min_course))
+
+
+
+
+def differential_evolution(set_of_mols_80: SetOfMolecules,
+                           num_of_samples: int,
+                           chg_method: ChargeMethod) -> namedtuple:
+
+    print("    Sampling...")
+    samples = lhs(num_of_samples, chg_method.params_bounds) # 1000
+
+
+
+    print("    Calculating of objective function for samples...")
+    candidates_rmsd = [objective_function(sample, chg_method, set_of_mols_80) for sample in samples]
+
+    print("\x1b[2K    Selecting candidates...")
+    candidates1 = samples[list(map(candidates_rmsd.index, nsmallest(100, candidates_rmsd)))] # 100
+
+    print("    1. local minimization of candidates")
+    loc_min_candidates1 = []
+    best_val = 100000000
+    best_candidate1 = None
+    for candidate in candidates1:
+        opt_params, obj_val,_,_ = _local_minimization_nlopt(set_of_mols_80, chg_method, candidate, 10000) # 1000
+        loc_min_candidates1.append(opt_params)
+        if obj_val < best_val:
+            best_val = obj_val
+            best_candidate1 = opt_params
+
+
+    best_candidate2, _,_,_ = _local_minimization_nlopt(set_of_mols_80, chg_method, best_candidate1, 10000) # 1000
+
+    ccc = 0
+    ddd = 0
+    from random import sample
+    for x in range(num_of_samples):
+        c1, c2 = sample(loc_min_candidates1, 2)
+        trial = best_candidate2 + np.random.random() * (c1 - c2)
+
+        error = False
+        for bounds, parameter in zip(chg_method.params_bounds, trial):
+            if bounds[0] > parameter or bounds[1] < parameter:
+                error = True
+        if error:
+            continue
+
+
+
+        obj_val = objective_function(trial, chg_method, set_of_mols_80)
+        if obj_val < 1:
+            ccc += 1
+            opt_params, obj_val, _, _ = _local_minimization_nlopt(set_of_mols_80, chg_method, trial, 500)
+            if obj_val < best_val:
+                ddd += 1
+                best_candidate2 = opt_params
+
+    print(f"\n\n\n{ccc}  {ddd}\n\n\n")
+
+    opt_params, obj_val, _, _ = _local_minimization_nlopt(set_of_mols_80, chg_method, best_candidate2, num_of_samples)
+
+    return namedtuple("chgs", ["params",
+                               "obj_val",
+                               "loc_min_courses",
+                               "obj_evals"])(best_candidate2,
+                                             best_val,
+                                             [],
+                                             10)
 
 
 def objective_function(params: np.array,
@@ -111,16 +267,17 @@ def objective_function(params: np.array,
     try:
         emp_chgs = chg_method.calculate(set_of_mols)
     except (np.linalg.LinAlgError, ZeroDivisionError):
+        print("test\ntest\nest")
         return 1000
 
     ats_types_rmsd, rmsd = _rmsd_calculation(emp_chgs)
-    print("    Total RMSD: {}    Worst RMSD: {}".format(str(rmsd)[:8], str(np.max(ats_types_rmsd))[:8]), end="\r")
     objective_val = rmsd + np.mean(ats_types_rmsd)
-    if isinstance(obj_vals, list):
-        obj_vals.append(objective_val)
-
     if np.isnan(objective_val):
         return 1000
+
+    if isinstance(obj_vals, list):
+        obj_vals.append(objective_val)
+    print("    Total RMSD: {}    Worst RMSD: {}".format(str(rmsd)[:8], str(np.max(ats_types_rmsd))[:8]), end="\r")
     return objective_val
 
 
@@ -129,7 +286,6 @@ def parameterize(sdf_file: str,
                  chg_method: str,
                  params_file: str,
                  optimization_method: str,
-                 minimization_method: str,
                  num_of_samples: int,
                  num_of_candidates: int,
                  subset: int,
@@ -147,29 +303,49 @@ def parameterize(sdf_file: str,
     set_of_mols = create_set_of_mols(sdf_file, ats_types_pattern)
     set_of_mols.emp_chgs_file = f"{data_dir}/output_files/empirical.chg"
     chg_method.prepare_params_for_par(set_of_mols)
-    add_chgs_to_set_of_mols(set_of_mols, ref_chgs_file, "ref_chgs")
-    set_of_mols_par, set_of_mols_val = create_par_val_set(set_of_mols,
-                                                          subset,
-                                                          chg_method)
+    add_chgs(set_of_mols, ref_chgs_file, "ref_chgs")
 
-    print("Preprocessing data...")
-    create_method_data(chg_method, set_of_mols)
-    create_method_data(chg_method, set_of_mols_par)
-    create_method_data(chg_method, set_of_mols_val)
-    print(colored("ok\n", "green"))
+    set_of_mols_80, set_of_mols_val = create_80_20(set_of_mols)
+    if optimization_method in ["guided_minimization", "differential_evolution"]: # smazat
+        print("Preprocessing data...")
+        set_of_mols_par = set_of_mols_80
+        create_method_data(chg_method, set_of_mols)
+        create_method_data(chg_method, set_of_mols_par)
+        create_method_data(chg_method, set_of_mols_val)
+        print(colored("ok\n", "green"))
+
+    else:
+        set_of_mols_par, set_of_mols_min, _ = create_par_val_set(set_of_mols_80,
+                                                                 subset,
+                                                                 chg_method)
+        print("Preprocessing data...")
+        create_method_data(chg_method, set_of_mols)
+        create_method_data(chg_method, set_of_mols_par)
+        create_method_data(chg_method, set_of_mols_min)
+        create_method_data(chg_method, set_of_mols_val)
+        print(colored("ok\n", "green"))
 
     print(f"Parameterizating by {' '.join(optimization_method.split('_'))}...")
     if optimization_method == "local_minimization":
         par_results = local_minimization(set_of_mols_par,
                                          chg_method,
-                                         minimization_method,
                                          chg_method.params_vals)
+    elif optimization_method == "opt_guided_minimization":
+        par_results = opt_guided_minimization(set_of_mols_par,
+                                              set_of_mols_min,
+                                              chg_method,
+                                              num_of_samples,
+                                              num_of_candidates)
     elif optimization_method == "guided_minimization":
         par_results = guided_minimization(set_of_mols_par,
-                                          chg_method,
                                           num_of_samples,
                                           num_of_candidates,
-                                          minimization_method)
+                                          chg_method)
+    elif optimization_method == "differential_evolution":
+        par_results = differential_evolution(set_of_mols_par,
+                                             num_of_samples,
+                                             chg_method)
+
     print(colored("\x1b[2Kok\n", "green"))
 
     chg_method.new_params(par_results.params,
