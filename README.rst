@@ -18,21 +18,24 @@ Optionally:
 
 * Argcomplete: 1.12.1 
 
-All this packages can be installed via conda https://www.anaconda.com/download. For example:
+All this packages can be installed via Anaconda https://www.anaconda.com/download. For example:
 
-::
-   $ conda install numpy scipy numba bokeh termcolor argcomplete
-   $ conda install -c conda-forge gitpython 
-
+```bash
+conda install numpy scipy numba bokeh termcolor argcomplete
+conda install -c conda-forge gitpython 
+```
 
 Installing
 ==========
 
 Clone the repository and run script mach.py. For example:
 
-   # git clone https://github.com/dargen3/MACH
-   # cd MACH
-   # python ./mach.py --help 
+
+```bash
+git clone https://github.com/dargen3/MACH
+cd MACH
+python ./mach.py --help 
+```
 
 Contact
 =======
