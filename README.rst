@@ -21,8 +21,9 @@ Optionally:
 All this packages can be installed via Anaconda https://www.anaconda.com/download. For example:
 
 .. code-block:: bash
-   conda install numpy scipy numba bokeh termcolor argcomplete
-   conda install -c conda-forge gitpython 
+
+    conda install numpy scipy numba bokeh termcolor argcomplete
+    conda install -c conda-forge gitpython 
 
 
 Installing
@@ -31,9 +32,10 @@ Installing
 Clone the repository and run script mach.py. For example:
 
 .. code-block:: bash
-   git clone https://github.com/dargen3/MACH
-   cd MACH
-   python ./mach.py --help 
+
+    git clone https://github.com/dargen3/MACH
+    cd MACH
+    python ./mach.py --help 
 
 Contact
 =======
