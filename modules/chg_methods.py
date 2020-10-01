@@ -13,11 +13,18 @@ class ChargeMethod:
         return self.__class__.__name__
 
     def load_params(self,
-                    params_file: str) -> str:
+                    params_file: str,
+                    ats_types_pattern: str = None) -> str:
 
         print(f"Loading of parameters from {params_file}...")
-        self.params = load(open(params_file))
-        self.ats_types_pattern = self.params["metadata"]["atomic_types_pattern"]
+        if params_file:
+            self.params = load(open(params_file))
+            self.ats_types_pattern = self.params["metadata"]["atomic_types_pattern"]
+        else:
+            self.params = self.params_pattern
+            self.ats_types_pattern = ats_types_pattern
+            self.params["metadata"]["atomic_types_pattern"] = ats_types_pattern
+
         self.params_per_at_type = len(self.params["atom"]["names"])
         method_in_params_file = self.params["metadata"]["method"]
         if self.__class__.__name__ != method_in_params_file:
@@ -164,6 +171,13 @@ def eem_calculate(set_of_molecules, params):
 class EEM(ChargeMethod):
 
     @property
+    def params_pattern(self):
+        return {"atom": {"data": {},
+                         "names": ["electronegativity", "hardness"]},
+                "common": {"kappa": 1},
+                "metadata": {"method": "EEM"}}
+
+    @property
     def params_bounds(self):
         return np.array([(0, 5) for x in range(len(self.params_vals))])
 
@@ -202,6 +216,13 @@ def qeq_calculate(set_of_molecules, params, num_ats_types):
 
 
 class QEq(ChargeMethod):
+
+    @property
+    def params_pattern(self):
+        return {"atom": {"data": {},
+                         "names": ["electronegativity", "hardness"]},
+                "common": {"kappa": 1},
+                "metadata": {"method": "QEq"}}
 
     @property
     def params_bounds(self):
@@ -252,9 +273,16 @@ def eqeq_calculate(set_of_molecules, params, num_ats_types):
 class EQEq(ChargeMethod):
 
     @property
+    def params_pattern(self):
+        return {"atom": {"data": {},
+                         "names": ["electron_affinity", "ionization_potencial"]},
+                "common": {"lambda": 1, "k": 1},
+                "metadata": {"method": "EQEq"}}
+
+    @property
     def params_bounds(self):
         params_bounds = []
-        for x in range(int((len(self.params_vals)-2)/2)):
+        for _ in range(int((len(self.params_vals)-2)/2)):
             params_bounds.append([0.0, 1.0])
             params_bounds.append([1.0, 5.0])
         params_bounds.append([0.0, 5.0])
@@ -267,10 +295,97 @@ class EQEq(ChargeMethod):
 
 @jit(nopython=True, cache=True)
 def sqe_calculate(set_of_molecules, params, num_ats_types):
+    multiplied_widths = np.empty((num_ats_types * 3, num_ats_types * 3), dtype=np.float64)
+    for x in range(num_ats_types):
+        for y in range(num_ats_types):
+            multiplied_widths[x * 3][y * 3] = np.sqrt(2 * params[x * 3 + 2] ** 2 + 2 * params[y * 3 + 2] ** 2)
+
+    results = np.empty(set_of_molecules.num_of_ats, dtype=np.float64)
+    index = 0
+    for molecule in set_of_molecules.mols:
+        num_of_at = molecule.num_of_ats
+        new_index = index + num_of_at
+        T = np.zeros((len(molecule.bonds), num_of_at))
+        bonds = molecule.bonds
+        for i in range(len(bonds)):
+            at1, at2, _ = bonds[i]
+            T[i, at1] += 1
+            T[i, at2] -= 1
+        # print(f"T:\n{T}\n\n\n")
+        matrix = np.zeros((num_of_at, num_of_at))
+        vector = np.zeros(num_of_at)
+        for i, par_index_i in enumerate(molecule.ats_ids):
+            matrix[i, i] = params[par_index_i + 1]
+            vector[i] = -params[par_index_i]
+            for j, (par_index_j, distance) in enumerate(zip(molecule.ats_ids[i + 1:],
+                                                            molecule.distance_matrix[i, i + 1:]),
+                                                        i + 1):
+                d0 = multiplied_widths[par_index_i, par_index_j]
+                matrix[i, j] = matrix[j, i] = erf(distance / d0) / distance
+        # print(f"vector:\n{vector}\n\n\n")
+        # 
+        # print(f"matrix:\n{matrix}\n\n\n")
+
+        A_sqe = np.dot(T, np.dot(matrix, T.T))
+
+        # print(f"T.T: \n{T.T}\n\n\n")
+        # print(f"np.dot(matrix,T.T): \n{np.dot(matrix, T.T)}\n\n\n")
+        # print(f"A_sqe:\n{A_sqe}\n\n\n")
+
+        B_sqe = np.dot(T, vector)
+        # print(f"T:\n{T}\n\n\n")
+        # print(f"vector:\n{vector}\n\n\n")
+        # print(f"B_sqe:\n{B_sqe}\n\n\n")
+
+
+        for i, bond_params_index in enumerate(molecule.bonds_ids):
+            A_sqe[i, i] += params[bond_params_index]
+
+        # np.set_printoptions(threshold=np.inf)
+        # print(A_sqe)
+        # print("")
+        # print(np.dot(np.linalg.solve(A_sqe, B_sqe), T))
+        # exit()
+
+
+        results[index: new_index] = np.dot(np.linalg.solve(A_sqe, B_sqe), T)
+
+        # print(f"np.linalg.solve(A_sqe, B_sqe):\n{np.linalg.solve(A_sqe, B_sqe)}\n\n\n")
+        # print(f"np.dot(np.linalg.solve(A_sqe, B_sqe), T):\n{np.dot(np.linalg.solve(A_sqe, B_sqe), T)}\n\n\n")
+
+
+
+        index = new_index
+    return results
+
+
+class SQE(ChargeMethod):
+
+    @property
+    def params_pattern(self):
+        return {"atom": {"data": {},
+                         "names": ["chi", "eta", "width"]},
+                "bond": {"data": {},
+                         "name": "hardness"},
+                "metadata": {"method": "SQE"}}
+
+    @property
+    def params_bounds(self):
+        params_bounds = [[-0, 5] for _ in range(len(self.params_vals))]
+        return np.array(params_bounds)
+
+    def calculate(self, set_of_molecules):
+
+        return sqe_calculate(set_of_molecules, self.params_vals, len(self.ats_types))
+
+
+@jit(nopython=True, cache=True)
+def sqeqp_calculate(set_of_molecules, params, num_ats_types):
     multiplied_widths = np.empty((num_ats_types * 4, num_ats_types * 4), dtype=np.float64)
     for x in range(num_ats_types):
         for y in range(num_ats_types):
             multiplied_widths[x * 4][y * 4] = np.sqrt(2 * params[x * 4 + 2] ** 2 + 2 * params[y * 4 + 2] ** 2)
+
     results = np.empty(set_of_molecules.num_of_ats, dtype=np.float64)
     index = 0
     for molecule in set_of_molecules.mols:
@@ -296,25 +411,119 @@ def sqe_calculate(set_of_molecules, params, num_ats_types):
                                                         i + 1):
                 d0 = multiplied_widths[par_index_i, par_index_j]
                 matrix[i, j] = matrix[j, i] = erf(distance / d0) / distance
+        list_of_q0 -= (np.sum(list_of_q0) - molecule.total_chg) / len(list_of_q0)
         vector -= np.dot(matrix, list_of_q0)
         vector += list_of_hardness * list_of_q0
         A_sqe = np.dot(T, np.dot(matrix, T.T))
         B_sqe = np.dot(T, vector)
         for i, bond_params_index in enumerate(molecule.bonds_ids):
             A_sqe[i, i] += params[bond_params_index]
-        results[index: new_index] = np.dot(np.linalg.solve(A_sqe, B_sqe), T)# + list_of_q0
+        results[index: new_index] = np.dot(np.linalg.solve(A_sqe, B_sqe), T) + list_of_q0
         index = new_index
     return results
 
 
-class SQE(ChargeMethod):
+class SQEqp(ChargeMethod):
+
+    @property
+    def params_pattern(self):
+        return {"atom": {"data": {},
+                         "names": ["chi", "eta", "width", "q0"]},
+                "bond": {"data": {},
+                         "name": "hardness"},
+                "metadata": {"method": "SQEqp"}}
 
     @property
     def params_bounds(self):
-        params_bounds = [[-2, 5] for _ in range(len(self.params_vals))]
+        params_bounds = [[0, 5] for _ in range(len(self.params_vals))]
         for x in range(len(self.ats_types)):
-            params_bounds[x * 4 + 3] = [y / 10 for y in params_bounds[x * 4 + 3]]
+            params_bounds[x * 4 + 3] = [-1, 1]
         return np.array(params_bounds)
 
     def calculate(self, set_of_molecules):
-        return sqe_calculate(set_of_molecules, self.params_vals, len(self.ats_types))
+        return sqeqp_calculate(set_of_molecules, self.params_vals, len(self.ats_types))
+
+
+#########################################¨¨¨¨¨¨¨¨
+
+
+
+
+
+
+
+
+
+@jit(nopython=True, cache=True)
+def sqeopt_calculate(set_of_molecules, params, num_ats_types):
+    multiplied_widths = np.empty((num_ats_types * 3, num_ats_types * 3), dtype=np.float64)
+    for x in range(num_ats_types):
+        for y in range(num_ats_types):
+            multiplied_widths[x * 3][y * 3] = np.sqrt(2 * params[x * 3 + 2] ** 2 + 2 * params[y * 3 + 2] ** 2)
+
+    results = np.empty(set_of_molecules.num_of_ats, dtype=np.float64)
+    index = 0
+    for molecule in set_of_molecules.mols:
+        num_of_at = molecule.num_of_ats
+        new_index = index + num_of_at
+        A_sqe = np.zeros((molecule.num_of_bonds, molecule.num_of_bonds))
+        B_sqe = np.zeros(molecule.num_of_bonds)
+        bonds = molecule.bonds
+        T = np.zeros((len(molecule.bonds), num_of_at))
+        for i in range(len(bonds)):
+            at1, at2, _ = bonds[i]
+            T[i, at1] += 1
+            T[i, at2] -= 1
+        matrix = np.zeros((num_of_at, num_of_at))
+        list_of_hardness = np.empty(num_of_at, dtype=np.float64)
+        for i, par_index_i in enumerate(molecule.ats_ids):
+            matrix[i, i] = params[par_index_i + 1]
+            list_of_hardness[i] = params[par_index_i + 1]
+            for j, (par_index_j, distance) in enumerate(zip(molecule.ats_ids[i + 1:],
+                                                            molecule.distance_matrix[i, i + 1:]),
+                                                        i + 1):
+                d0 = multiplied_widths[par_index_i, par_index_j]
+                matrix[i, j] = matrix[j, i] = erf(distance / d0) / distance
+        for i, bond_params_index in enumerate(molecule.bonds_ids): # mozna prepsat! numba už to snad umi
+            at1, at2, _ = bonds[i]
+            A_sqe[i, i] = -2*matrix[at1][at2] + list_of_hardness[at1] + list_of_hardness[at2] + params[bond_params_index]
+            B_sqe[i] = -params[molecule.ats_ids[at1]] + params[molecule.ats_ids[at2]]
+            for j in range(i+1, molecule.num_of_bonds):
+                at2_1, at2_2, _ = bonds[j]
+                if at1 == at2_1:
+                    A_sqe[i, j] = A_sqe[j, i] = -1*(matrix[at1][at2] + matrix[at2_1][at2_2] - list_of_hardness[at1] - matrix[at2][at2_2])
+
+                elif at1 == at2_2:
+                    A_sqe[i, j] = A_sqe[j, i] = (matrix[at1][at2] + matrix[at2_1][at2_2] - list_of_hardness[at1] - matrix[at2][at2_1])
+
+                elif at2 == at2_1:
+                    A_sqe[i, j] = A_sqe[j, i] = (matrix[at1][at2] + matrix[at2_1][at2_2] - list_of_hardness[at2] - matrix[at1][at2_2])
+
+                elif at2 == at2_2:
+                    A_sqe[i, j] = A_sqe[j, i] = -1*(matrix[at1][at2] + matrix[at2_1][at2_2] - list_of_hardness[at2] - matrix[at1][at2_1])
+
+                else:
+                   A_sqe[i, j] = A_sqe[j, i] = matrix[at1][at2_1] + matrix[at2][at2_2] - matrix[at2][at2_1] - matrix[at1][at2_2]
+        results[index: new_index] = np.dot(np.linalg.solve(A_sqe, B_sqe), T)
+        index = new_index
+    return results
+
+
+class SQEopt(ChargeMethod):
+
+    @property
+    def params_pattern(self):
+        return {"atom": {"data": {},
+                         "names": ["chi", "eta", "width"]},
+                "bond": {"data": {},
+                         "name": "hardness"},
+                "metadata": {"method": "SQEopt"}}
+
+    @property
+    def params_bounds(self):
+        params_bounds = [[-0, 5] for _ in range(len(self.params_vals))]
+        return np.array(params_bounds)
+
+    def calculate(self, set_of_molecules):
+
+        return sqeopt_calculate(set_of_molecules, self.params_vals, len(self.ats_types))

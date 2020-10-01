@@ -1,39 +1,40 @@
-onda install numpy scipy numba termcolor argcomplete bokeh gitpython
+****
+MACH
+****
 
-acks chyba s nábojema (nebyly rovny nule, protože suma q0)
+MACH is a software for calculation of partial atomic charges via empirical methods and for their parameterization.
+
+Dependencies
+============
+* Python: 3.6-3.8
+* Numpy: 1.19.1
+* Scipy: 1.5.2
+* Numba: 0.51.2
+* Termcolor: 1.1.0
+* Bokeh: 2.2.1
+* Gitpython: 3.1.8
+
+Optionally:
+
+* Argcomplete: 1.12.1 
+
+All this packages can be installed via conda https://www.anaconda.com/download. For example:
+
+::
+   $ conda install numpy scipy numba bokeh termcolor argcomplete
+   $ conda install -c conda-forge gitpython 
 
 
+Installing
+==========
 
+Clone the repository and run script mach.py. For example:
 
+   # git clone https://github.com/dargen3/MACH
+   # cd MACH
+   # python ./mach.py --help 
 
-todo!
-proteins (sqe, acks2)
-
-calculation nejede methods/87 except
-
-  nacitaci naboju - https://github.com/eharpste/molparser/blob/master/convertmol.py
-
-
-
-
-nemazat!!!! http://c4.cabrillo.edu/404/ctfile.pdf
- 
-přepsat command pro local minimization při send meta
-
-
-beyond PEP 8 (3 je zacatek)
-david beazley - superheroes, the fun of reainvention, modules and packages
-
-
-hotovo - calculation.py
-       - molecule.py 
-       - comparison.py 
-       - parameterization.py 
-       - set_of_molecules.py 
-       - charges_method.py
-       - parameterization_meta.py
-       - arguments.py
-
-       - input output
-
+Contact
+=======
+ondrej.schindler@mail.muni.cz
 

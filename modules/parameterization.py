@@ -14,6 +14,10 @@ from .control_input import control_and_copy_input_files
 from .set_of_molecules import *
 from .chg_methods import ChargeMethod
 
+global obj_eval
+global obj_eval_error
+obj_eval = 0
+obj_eval_error = 0
 
 @jit(nopython=True, cache=True)
 def lhs(num_samples: int,
@@ -36,24 +40,29 @@ def local_minimization(set_of_mols_par: SetOfMolecules,
                        chg_method: ChargeMethod,
                        initial_params: np.array) -> namedtuple:
 
+    #print("local minimization termination errrorororor!!")
+    #return namedtuple("chgs", ["params",
+    #                         "obj_val",
+    #                         "loc_min_courses"])(initial_params,
+    #                                             0,
+    #                                             [[0,0,0]])
+
     loc_min_course = []
     res = minimize(objective_function,
                    initial_params,
                    method="SLSQP",
-                   options={"maxiter": 1000000},
-                   bounds=chg_method.params_bounds,
+                   options={"maxiter": 10000000, "ftol": 1e-10},
                    args=(chg_method, set_of_mols_par, loc_min_course))
     return namedtuple("chgs", ["params",
                                "obj_val",
-                               "loc_min_courses",
-                               "obj_evals"])(res.x,
-                                             res.fun,
-                                             [loc_min_course],
-                                             len(loc_min_course))
+                               "loc_min_courses"])(res.x,
+                                                   res.fun,
+                                                   [loc_min_course])
 
 
 def opt_guided_minimization(set_of_mols_par: SetOfMolecules,
-                            set_of_mols_min: SetOfMolecules,
+                            subset_of_mols: SetOfMolecules,
+                            min_subset_of_mols: SetOfMolecules,
                             chg_method: ChargeMethod,
                             num_of_samples: int,
                             num_of_candidates: int) -> namedtuple:
@@ -62,30 +71,37 @@ def opt_guided_minimization(set_of_mols_par: SetOfMolecules,
     samples = lhs(num_of_samples, chg_method.params_bounds)
 
     print("    Calculating of objective function for samples...")
-    candidates_rmsd = [objective_function(sample, chg_method, set_of_mols_min) for sample in samples]
+    samples_rmsd = [objective_function(sample, chg_method, min_subset_of_mols) for sample in samples]
 
     print("\x1b[2K    Selecting candidates...")
-    best_50_candidates = samples[list(map(candidates_rmsd.index, nsmallest(50, candidates_rmsd)))] # num_of_candidates
-    best_50_candidates_rmsd = [objective_function(sample, chg_method, set_of_mols_par) for sample in best_50_candidates]
-    best_5_candidates = best_50_candidates[list(map(best_50_candidates_rmsd.index, nsmallest(5, best_50_candidates_rmsd)))]  # num_of_candidates
+    best_samples = samples[list(map(samples_rmsd.index, nsmallest(num_of_candidates * 100, samples_rmsd)))]
+    best_samples_rmsd = [objective_function(sample, chg_method, set_of_mols_par) for sample in best_samples]
+    candidates = best_samples[list(map(best_samples_rmsd.index, nsmallest(num_of_candidates, best_samples_rmsd)))]
 
-    print("    Local minimizating...")
-    best_params = None
-    best_obj_val = 1000000
+    print("\x1b[2K    Local minimizating...")
     all_loc_min_course = []
-    for params in best_5_candidates:
-        opt_params, final_obj_val, loc_min_course, _ = local_minimization(set_of_mols_par, chg_method, params)
+    opt_candidates = []
+    for params in candidates:
+        opt_params, _, loc_min_course = local_minimization(subset_of_mols, chg_method, params)
         all_loc_min_course.append(loc_min_course[0])
-        if final_obj_val < best_obj_val:
-            best_params = opt_params
-            best_obj_val = final_obj_val
+        opt_candidates.append(opt_params)
+
+    opt_candidates_rmsd = [objective_function(candidate, chg_method, set_of_mols_par) for candidate in opt_candidates]
+    final_candidate_obj_val = nsmallest(1, opt_candidates_rmsd)
+    final_candidate_index = opt_candidates_rmsd.index(final_candidate_obj_val)
+    final_candidate = opt_candidates[final_candidate_index]
+
+    print("\x1b[2K    Final local minimizating...")
+    final_params, final_obj_val, loc_min_course = local_minimization(set_of_mols_par, chg_method, final_candidate)
+    all_loc_min_course[final_candidate_index].extend(loc_min_course[0])
+
     return namedtuple("chgs", ["params",
-                                  "obj_val",
-                                  "loc_min_courses",
-                                  "obj_evals"])(best_params,
-                                                best_obj_val,
-                                                all_loc_min_course,
-                                                num_of_samples + sum(len(course) for course in all_loc_min_course))
+                               "obj_val",
+                               "loc_min_courses"])(final_params,
+                                                   final_obj_val,
+                                                   all_loc_min_course)
+
+
 
 
 
@@ -101,8 +117,8 @@ def _local_minimization_nlopt(set_of_mols_80: SetOfMolecules,
     opt.set_min_objective(lambda x, grad: objective_function(x, chg_method, set_of_mols_80, loc_min_course))
     opt.set_xtol_abs(1e-6)
     opt.set_maxeval(steps)
-    opt.set_lower_bounds([x[0] for x in chg_method.params_bounds])
-    opt.set_upper_bounds([x[1] for x in chg_method.params_bounds])
+    # opt.set_lower_bounds([x[0] for x in chg_method.params_bounds])
+    # opt.set_upper_bounds([x[1] for x in chg_method.params_bounds])
 
 
     # print(opt.get_lower_bounds())
@@ -160,6 +176,7 @@ def guided_minimization(set_of_mols_80: SetOfMolecules,
             best_obj_val = final_obj_val
             best_local_index = index
 
+
     print(f"\x1b[2K    Local minimizating of best candidate...")
     best_opt_params, best_opt_val, best_opt_loc_min_course, _ = _local_minimization_nlopt(set_of_mols_80, chg_method, best_params, 3*num_of_samples)
     print([len(x) for x in all_loc_min_course])
@@ -177,76 +194,12 @@ def guided_minimization(set_of_mols_80: SetOfMolecules,
 
 
 
-def differential_evolution(set_of_mols_80: SetOfMolecules,
-                           num_of_samples: int,
-                           chg_method: ChargeMethod) -> namedtuple:
-
-    print("    Sampling...")
-    samples = lhs(num_of_samples, chg_method.params_bounds) # 1000
-
-
-
-    print("    Calculating of objective function for samples...")
-    candidates_rmsd = [objective_function(sample, chg_method, set_of_mols_80) for sample in samples]
-
-    print("\x1b[2K    Selecting candidates...")
-    candidates1 = samples[list(map(candidates_rmsd.index, nsmallest(100, candidates_rmsd)))] # 100
-
-    print("    1. local minimization of candidates")
-    loc_min_candidates1 = []
-    best_val = 100000000
-    best_candidate1 = None
-    for candidate in candidates1:
-        opt_params, obj_val,_,_ = _local_minimization_nlopt(set_of_mols_80, chg_method, candidate, 10000) # 1000
-        loc_min_candidates1.append(opt_params)
-        if obj_val < best_val:
-            best_val = obj_val
-            best_candidate1 = opt_params
-
-
-    best_candidate2, _,_,_ = _local_minimization_nlopt(set_of_mols_80, chg_method, best_candidate1, 10000) # 1000
-
-    ccc = 0
-    ddd = 0
-    from random import sample
-    for x in range(num_of_samples):
-        c1, c2 = sample(loc_min_candidates1, 2)
-        trial = best_candidate2 + np.random.random() * (c1 - c2)
-
-        error = False
-        for bounds, parameter in zip(chg_method.params_bounds, trial):
-            if bounds[0] > parameter or bounds[1] < parameter:
-                error = True
-        if error:
-            continue
-
-
-
-        obj_val = objective_function(trial, chg_method, set_of_mols_80)
-        if obj_val < 1:
-            ccc += 1
-            opt_params, obj_val, _, _ = _local_minimization_nlopt(set_of_mols_80, chg_method, trial, 500)
-            if obj_val < best_val:
-                ddd += 1
-                best_candidate2 = opt_params
-
-    print(f"\n\n\n{ccc}  {ddd}\n\n\n")
-
-    opt_params, obj_val, _, _ = _local_minimization_nlopt(set_of_mols_80, chg_method, best_candidate2, num_of_samples)
-
-    return namedtuple("chgs", ["params",
-                               "obj_val",
-                               "loc_min_courses",
-                               "obj_evals"])(best_candidate2,
-                                             best_val,
-                                             [],
-                                             10)
-
-
 def objective_function(params: np.array,
                        chg_method: ChargeMethod,
                        set_of_mols: SetOfMolecules,
                        obj_vals: list = None) -> float:
+
+    global obj_eval, obj_eval_error
 
     def _rmsd_calculation(emp_chg: np.array) -> tuple:
 
@@ -263,17 +216,20 @@ def objective_function(params: np.array,
             index = new_index
         return ats_types_rmsd, total_mols_rmsd / set_of_mols.num_of_mols
 
+    obj_eval += 1
+
     chg_method.params_vals = params
     try:
         emp_chgs = chg_method.calculate(set_of_mols)
-    except (np.linalg.LinAlgError, ZeroDivisionError):
-        print("test\ntest\nest")
-        return 1000
+    except (np.linalg.LinAlgError, ZeroDivisionError) as e:
+        obj_eval_error += 1
+        print(e)
+        return 1000.0
 
     ats_types_rmsd, rmsd = _rmsd_calculation(emp_chgs)
     objective_val = rmsd + np.mean(ats_types_rmsd)
     if np.isnan(objective_val):
-        return 1000
+        return 1000.0
 
     if isinstance(obj_vals, list):
         obj_vals.append(objective_val)
@@ -285,6 +241,8 @@ def parameterize(sdf_file: str,
                  ref_chgs_file: str,
                  chg_method: str,
                  params_file: str,
+                 ats_types_pattern: str,
+                 percent_par: int,
                  optimization_method: str,
                  num_of_samples: int,
                  num_of_candidates: int,
@@ -295,44 +253,59 @@ def parameterize(sdf_file: str,
 
     start_time = date.now()
     control_and_copy_input_files(data_dir,
-                                 (sdf_file, ref_chgs_file, params_file),
+                                 (file for file in (sdf_file, ref_chgs_file, params_file) if file),
                                  rewriting_with_force)
 
     chg_method = getattr(import_module("modules.chg_methods"), chg_method)()
-    ats_types_pattern = chg_method.load_params(params_file)
+    ats_types_pattern = chg_method.load_params(params_file, ats_types_pattern)
     set_of_mols = create_set_of_mols(sdf_file, ats_types_pattern)
     set_of_mols.emp_chgs_file = f"{data_dir}/output_files/empirical.chg"
     chg_method.prepare_params_for_par(set_of_mols)
     add_chgs(set_of_mols, ref_chgs_file, "ref_chgs")
 
-    set_of_mols_80, set_of_mols_val = create_80_20(set_of_mols)
-    if optimization_method in ["guided_minimization", "differential_evolution"]: # smazat
-        print("Preprocessing data...")
-        set_of_mols_par = set_of_mols_80
-        create_method_data(chg_method, set_of_mols)
-        create_method_data(chg_method, set_of_mols_par)
-        create_method_data(chg_method, set_of_mols_val)
-        print(colored("ok\n", "green"))
+    set_of_mols_par, set_of_mols_val = create_80_20(set_of_mols, percent_par)
+    subset_of_mols, min_subset_of_mols = create_par_val_set(set_of_mols_par,
+                                                            subset)
 
-    else:
-        set_of_mols_par, set_of_mols_min, _ = create_par_val_set(set_of_mols_80,
-                                                                 subset,
-                                                                 chg_method)
-        print("Preprocessing data...")
-        create_method_data(chg_method, set_of_mols)
-        create_method_data(chg_method, set_of_mols_par)
-        create_method_data(chg_method, set_of_mols_min)
-        create_method_data(chg_method, set_of_mols_val)
-        print(colored("ok\n", "green"))
+    print("Preprocessing data...")
+    create_method_data(chg_method, set_of_mols)
+    create_method_data(chg_method, set_of_mols_par)
+    create_method_data(chg_method, subset_of_mols)
+    create_method_data(chg_method, min_subset_of_mols)
+    create_method_data(chg_method, set_of_mols_val)
+    print(colored("ok\n", "green"))
 
     print(f"Parameterizating by {' '.join(optimization_method.split('_'))}...")
+    #if str(chg_method) == "SQEqp":
+    #    for at_type in chg_method.ats_types:
+    #        print(at_type, len(set_of_mols_par.ref_ats_types_chgs[at_type]), np.mean(set_of_mols_par.ref_ats_types_chgs[at_type]))
+    #    exit()
+    """d = []
+    for mol in set_of_mols.mols:
+        d.append(mol.total_chg)
+
+    from collections import Counter
+    c = Counter(d)
+    print(c.most_common())
+    exit()"""
+
+    # chg_method.average_charges = np.zeros(len(chg_method.ats_types)*3)
+    # for index, at_type in enumerate(chg_method.ats_types):
+    #
+    #     chg_method.average_charges[index*3] = np.mean(set_of_mols_par.ref_ats_types_chgs[at_type])
+    #
+    # print([chg_method.average_charges[x*3] for x in range(len(chg_method.ats_types))])
+    # print(chg_method.ats_types)
+    # exit()
+
     if optimization_method == "local_minimization":
         par_results = local_minimization(set_of_mols_par,
                                          chg_method,
                                          chg_method.params_vals)
     elif optimization_method == "opt_guided_minimization":
         par_results = opt_guided_minimization(set_of_mols_par,
-                                              set_of_mols_min,
+                                              subset_of_mols,
+                                              min_subset_of_mols,
                                               chg_method,
                                               num_of_samples,
                                               num_of_candidates)
@@ -341,18 +314,25 @@ def parameterize(sdf_file: str,
                                           num_of_samples,
                                           num_of_candidates,
                                           chg_method)
-    elif optimization_method == "differential_evolution":
-        par_results = differential_evolution(set_of_mols_par,
-                                             num_of_samples,
-                                             chg_method)
+    # elif optimization_method == "bayes":
+    #     optimizer = BayesianOptimization(f=objective_function,
+    #                                      pbounds=pbounds,
+    #         verbose=2,  # verbose = 1 prints only when a maximum is observed, verbose = 0 is silent
+    #         random_state=1,
+    #     )
+    #
+    #     optimizer.maximize(
+    #         init_points=2,
+    #         n_iter=3,
+    #     )
 
     print(colored("\x1b[2Kok\n", "green"))
 
     chg_method.new_params(par_results.params,
                           set_of_mols.sdf_file,
                           f"{data_dir}/output_files/parameters.json",
-                          ref_chgs_file,
                           params_file,
+                          ref_chgs_file,
                           start_time.strftime('%Y-%m-%d %H:%M'))
 
     print("Preparing data for comparison...")
@@ -377,6 +357,7 @@ def parameterize(sdf_file: str,
                              f"Type of cpu: {[x.strip().split(':')[1] for x in open('/proc/cpuinfo').readlines() if 'model name' in x][0]}",
                              f"Command: {' '.join(argv)}",
                              f"Number of parameters: {len(chg_method.params_vals)}",
-                             f"Objective function evaluations: {par_results.obj_evals}",
-                             f"Github commit hash: "
-                             f"<a href = \"https://github.com/dargen3/MACH/commit/{git_hash}\">{git_hash}</a></div>"])
+                             f"Objective function evaluations: {obj_eval}",
+                             f"Objective function evaluations ended with error: {obj_eval_error}",
+                             f"Achieved value of objective function: {par_results.obj_val}",
+                             f"Github commit hash: <a href = \"https://github.com/dargen3/MACH/commit/{git_hash}\">{git_hash}</a></div>"])

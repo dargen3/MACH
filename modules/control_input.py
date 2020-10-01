@@ -1,5 +1,5 @@
 from os import path, makedirs
-from shutil import rmtree, copy
+from shutil import rmtree, copy, copytree
 from sys import exit
 
 from termcolor import colored
@@ -31,4 +31,9 @@ def control_and_copy_input_files(data_dir: str,
     makedirs(path.join(data_dir, "output_files"))
     for file in files:
         copy(file, input_files_data_dir)
+    makedirs(path.join(data_dir, "source_code"))
+    source_code_data_dir = path.join(data_dir, "source_code")
+    copy("mach.py", source_code_data_dir)
+    copytree("modules", path.join(source_code_data_dir, "modules"))
+    rmtree(path.join(source_code_data_dir, "modules/__pycache__"))
     print(colored("ok\n", "green"))

@@ -132,10 +132,10 @@ def _stats(set_of_mols: SetOfMolecules,
 
     mols_data = np.round([_calculate_stats(mol.ref_chgs, mol.emp_chgs) for mol in set_of_mols.mols], 4)
     with open(mols_log_file, "w") as mols_log_file:
-        mols_log_file.write("name, atomic types, rmsd, maximum deviation,"
+        mols_log_file.write("name, atomic types, bonds types, rmsd, maximum deviation,"
                             "average deviation, pearson**2, number of atoms\n")
         for mol, (rmsd, max_dev, av_dev, pearson, num_of_at) in zip(set_of_mols.mols, mols_data):
-            mols_log_file.write(f"{mol.name}, {';'.join(sorted(set(mol.ats_srepr)))}, {rmsd}, "
+            mols_log_file.write(f"{mol.name}, {';'.join(sorted(set(mol.ats_srepr)))}, {';'.join(sorted(set(mol.bonds_srepr)))}, {rmsd}, "
                                 f"{max_dev}, {av_dev}, {pearson}, {int(num_of_at)}\n")
     mols_num_of_at = [mol.num_of_ats for mol in set_of_mols.mols]
     averaged_mols_data = [*[round(np.mean(mols_data[:, y]), 4) for y in range(4)],
@@ -250,18 +250,18 @@ def _comparison_corr_graph(set_of_mol_par: SetOfMolecules,
     graph.y_range = bk.models.Range1d(*graph_ranges)
 
     graph.line([-1000, 1000], [-1000, 1000])
-    graph.circle(set_of_mol_val.ref_chgs,
-                 set_of_mol_val.emp_chgs,
-                 size=6,
-                 legend="Validation",
-                 fill_color="red",
-                 line_color="red")
     graph.circle(set_of_mol_par.ref_chgs,
                  set_of_mol_par.emp_chgs,
                  size=6,
                  legend="Parameterization",
                  fill_color="black",
                  line_color="black")
+    graph.circle(set_of_mol_val.ref_chgs,
+                 set_of_mol_val.emp_chgs,
+                 size=6,
+                 legend="Validation",
+                 fill_color="red",
+                 line_color="red")
     graph.legend.location = "top_left"
     graph.legend.click_policy = "hide"
 
@@ -345,7 +345,10 @@ def _background_color(value: float) -> str:
 
 
 def _format_input_file(file: str) -> tuple:
-    return f"../input_files/{file.split('/')[-1]}", f"../input_files/{file.split('/')[-1]}"
+    if file:
+        return f"../input_files/{file.split('/')[-1]}", f"../input_files/{file.split('/')[-1]}"
+    else:
+        return "Parameters was not entered.", None
 
 
 def _write_html_comparison(set_of_mols: SetOfMolecules,

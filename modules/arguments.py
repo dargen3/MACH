@@ -17,8 +17,8 @@ def load_arguments():
     parser.add_argument("--ats_types_pattern",
                         help="Use for comparison and set_of_molecules only. "
                              "Define used atomic classifier.",
-                        choices=("plain", "hbo", "plain-ba", "plain-ba-sb"),
-                        default="plain")
+                        choices=("plain", "hbo", "plain-ba", "plain-ba-sb", "plain-ba-e"),
+                        default="hbo")
     parser.add_argument("--cpu",
                         help="Use for \"guided minimization\" optimization method only. "
                              "Define number of used CPU for parameterization.",
@@ -36,29 +36,37 @@ def load_arguments():
                         help="For internal usage only.")
     parser.add_argument("--chg_method",
                         help="Empirical method for calculation or parameterization partial atomic charges.",
-                        choices=("EEM", "QEq", "SQE", "EQEq", "EQEqc"))
+                        choices=("EEM", "QEq", "EQEq", "SQE", "SQEqp", "SQEopt"))
     parser.add_argument("--num_of_candidates",
                         help="Use for \"guided minimization\" optimization method only. "
                              "Define number of used candidates.",
-                        default=30,
+                        default=3,
                         type=int)
     parser.add_argument("--num_of_samples",
                         help="Use for \"guided minimization\" optimization method only. "
                              "Define number of used initial samples.",
-                        default=500000,
+                        default=10000,
                         type=int)
     parser.add_argument("--optimization_method",
                         help="Optimization method for parameterization.",
-                        choices=("local_minimization", "guided_minimization", "opt_guided_minimization", "differential_evolution"),
+                        choices=("local_minimization", "guided_minimization", "opt_guided_minimization", "bayes"),
                         default="opt_guided_minimization")
     parser.add_argument("--subset",
                         help="Use for parameterization mode only. "
                              "Minimal subset of molecules that contains n atoms of each atom type "
                              "is used for parameterization. Other molecules are used for validation.",
-                        default=100,
+                        default=10,
                         type=int)
+    parser.add_argument("--parameterize_atoms",
+                        help="Use for parameterization mode only."
+                             "Define space of parameters.",
+                        default="")
     parser.add_argument("--params_file",
                         help="File with parameters.")
+    parser.add_argument("--percent_par",
+                        help="Set how many percent of set of molecules should be used for parameterization.",
+                        default=80,
+                        type=int)
     parser.add_argument("--RAM",
                         help="Use for parameterization_meta mode only. "
                              "Define maximum RAM usage for META job in GB.",
@@ -77,7 +85,7 @@ def load_arguments():
     parser.add_argument("--walltime",
                         help="Use for parameterization_meta mode only. "
                              "Define maximum time for META job in hours.",
-                        default=24,
+                        default=100,
                         type=int)
 
     argcomplete.autocomplete(parser)
@@ -106,16 +114,20 @@ def load_arguments():
     elif args.mode in ["parameterization", "parameterization_meta"]:
         if any(arg is None for arg in [args.sdf_file,
                                        args.ref_chgs_file,
-                                       args.chg_method,
-                                       args.params_file]):
+                                       args.chg_method]):
             parser.error("For parameterization mode choose --sdf_file, "
-                         "--ref_chgs_file, --chg_method and --params_file.")
+                         "--ref_chgs_file and --chg_method.")
 
         if not args.git_hash:
             args.git_hash = git.Repo(search_parent_directories=True).head.object.hexsha
 
     if args.subset < 1:
         parser.error("Error! subset value must be higher then 0!")
+
+    if args.parameterize_atoms:
+        args.parameterize_atoms = args.parameterize_atoms.split(",")
+        print(args.parameterize_atoms)
+        exit()
 
     print(colored("ok\n", "green"))
     return args
