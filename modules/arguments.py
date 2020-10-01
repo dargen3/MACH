@@ -36,7 +36,7 @@ def load_arguments():
                         help="For internal usage only.")
     parser.add_argument("--chg_method",
                         help="Empirical method for calculation or parameterization partial atomic charges.",
-                        choices=("EEM", "QEq", "EQEq", "SQE", "SQEqp", "SQEopt"))
+                        choices=("EEM", "QEq", "EQEq", "SQE", "SQEqp", "SQEopt", "SQEqpopt", "SQEqpiter"))
     parser.add_argument("--num_of_candidates",
                         help="Use for \"guided minimization\" optimization method only. "
                              "Define number of used candidates.",
