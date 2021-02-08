@@ -48,6 +48,7 @@ if __name__ == '__main__':
                      args.num_of_samples,
                      args.num_of_candidates,
                      args.subset,
+                     args.random_seed,
                      args.data_dir,
                      args.rewriting_with_force,
                      args.git_hash)

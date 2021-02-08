@@ -25,6 +25,24 @@ def comparison(sdf_file: str,
     add_chgs(set_of_mols, emp_chgs_file, "emp_chgs")
     add_chgs(set_of_mols, ref_chgs_file, "ref_chgs")
 
+    # tomas - smazat
+    """
+    for molecule in set_of_mols.mols:
+        for a, r, e in zip(molecule.ats_srepr, molecule.ref_chgs, molecule.emp_chgs):
+            print(f"{a},{r},{e}")
+    
+    with open("type_ref_emp_SQEqp_ba_npa.csv", "w") as file:
+        file.write("Atomic type,Reference charges,Empirical charges\n")
+        for molecule in set_of_mols.mols:
+            for a, r, e in zip(molecule.ats_srepr, molecule.ref_chgs, molecule.emp_chgs):
+                file.write(f"{str(a)},{str(r)},{str(e)}\n")
+     
+    exit()
+    """
+    # posem :D
+    
+    
+    
     print("Calculation of statistical data...")
     stats = _stats(set_of_mols, f"{data_dir}/output_files/molecules.log")
     print(colored("ok\n", "green"))
@@ -104,7 +122,7 @@ def _calculate_stats(ref_chgs: np.array,
     rmsd = round(np.sqrt((1.0 / deviations.size) * np.sum(deviations ** 2)), 4)
     max_deviation = round(np.max(deviations), 4)
     average_deviation = round(np.mean(deviations), 4)
-    pearson_2 = round(np.corrcoef(ref_chgs, emp_chgs)[0, 1] ** 2, 4)
+    pearson_2 = round(np.corrcoef(ref_chgs, emp_chgs)[0, 1]**2, 4)
     return namedtuple("stats", ["rmsd",
                                 "max_deviation",
                                 "average_deviation",
@@ -133,10 +151,10 @@ def _stats(set_of_mols: SetOfMolecules,
     mols_data = np.round([_calculate_stats(mol.ref_chgs, mol.emp_chgs) for mol in set_of_mols.mols], 4)
     with open(mols_log_file, "w") as mols_log_file:
         mols_log_file.write("name, atomic types, bonds types, rmsd, maximum deviation,"
-                            "average deviation, pearson**2, number of atoms\n")
-        for mol, (rmsd, max_dev, av_dev, pearson, num_of_at) in zip(set_of_mols.mols, mols_data):
+                            "average deviation, pearson_2, number of atoms\n")
+        for mol, (rmsd, max_dev, av_dev, pearson_2, num_of_at) in zip(set_of_mols.mols, mols_data):
             mols_log_file.write(f"{mol.name}, {';'.join(sorted(set(mol.ats_srepr)))}, {';'.join(sorted(set(mol.bonds_srepr)))}, {rmsd}, "
-                                f"{max_dev}, {av_dev}, {pearson}, {int(num_of_at)}\n")
+                                f"{max_dev}, {av_dev}, {pearson_2}, {int(num_of_at)}\n")
     mols_num_of_at = [mol.num_of_ats for mol in set_of_mols.mols]
     averaged_mols_data = [*[round(np.mean(mols_data[:, y]), 4) for y in range(4)],
                           set_of_mols.num_of_mols,
@@ -223,7 +241,7 @@ def _corr_graph(set_of_mols: SetOfMolecules,
                                      y=11,
                                      x_units='screen',
                                      y_units='screen',
-                                     text=f'R²: {stats.all_ats.pearson_2}',
+                                     text=f'R²: {round(stats.all_ats.pearson_2, 4)}',
                                      render_mode='css',
                                      text_font_size="25px"))
     return graph

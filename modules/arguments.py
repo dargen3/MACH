@@ -17,7 +17,7 @@ def load_arguments():
     parser.add_argument("--ats_types_pattern",
                         help="Use for comparison and set_of_molecules only. "
                              "Define used atomic classifier.",
-                        choices=("plain", "hbo", "plain-ba", "plain-ba-sb", "plain-ba-e"),
+                        choices=("plain", "hbo", "plain-ba", "plain-ba-sb", "hbo-ba", "plain-ba-ba"),
                         default="hbo")
     parser.add_argument("--cpu",
                         help="Use for \"guided minimization\" optimization method only. "
@@ -36,7 +36,7 @@ def load_arguments():
                         help="For internal usage only.")
     parser.add_argument("--chg_method",
                         help="Empirical method for calculation or parameterization partial atomic charges.",
-                        choices=("EEM", "QEq", "EQEq", "SQE", "SQEqp", "SQEopt", "SQEqpopt", "SQEqpiter"))
+                        choices=("EEM", "EQEq", "SQE", "SQEq0", "SQEqp", "SQEqa", "QEq_Louwen_Vogt", "QEq_Nisimoto_Mataga", "QEq_Nisimoto_Mataga_Wiess", "QEq_Ohno", "QEq_Ohno_Klopman", "QEq_Dasgupta_Huzinaga"))
     parser.add_argument("--num_of_candidates",
                         help="Use for \"guided minimization\" optimization method only. "
                              "Define number of used candidates.",
@@ -49,7 +49,7 @@ def load_arguments():
                         type=int)
     parser.add_argument("--optimization_method",
                         help="Optimization method for parameterization.",
-                        choices=("local_minimization", "guided_minimization", "opt_guided_minimization", "bayes"),
+                        choices=("local_minimization", "guided_minimization", "opt_guided_minimization", "bayesian_optimization"),
                         default="opt_guided_minimization")
     parser.add_argument("--subset",
                         help="Use for parameterization mode only. "
@@ -92,7 +92,7 @@ def load_arguments():
     args = parser.parse_args()
 
     if not args.data_dir:
-        args.data_dir = f"{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}_{args.mode}_{args.chg_method}_{args.sdf_file.split('/')[-1][:-4]}"
+        args.data_dir = f"{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}_{args.mode}_{args.chg_method}_{args.sdf_file.split('/')[-1][:-4]}_{args.ats_types_pattern}"
 
     if args.mode == "set_of_molecules_info":
         if args.sdf_file is None:

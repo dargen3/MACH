@@ -27,13 +27,18 @@ def parameterization_meta(sdf_file: str,
            f"mkdir {data_dir}; "
            f"mkdir {data_dir}/input_files; "
            f"mkdir {data_dir}/source_code; "
-           f"mkdir {data_dir}/output_files'")
+           f"mkdir {data_dir}/output_files; "
+           f"cp structures/{basename(sdf_file)} {data_dir}/input_files ;"
+           f"cp reference_charges/{basename(ref_chgs_file)} {data_dir}/input_files '")
 
+    # předělat!!!!! 
     system(f"scp {sdf_file} {ref_chgs_file} {params_file} "
            f"dargen3@nympha.metacentrum.cz:/storage/praha1/home/dargen3/mach/{data_dir}/input_files")
+
+
     print(colored("ok\n", "green"))
 
-    command = f" /storage/praha1/home/dargen3/miniconda3/bin/python3.7 mach.py " \
+    command = f" /storage/praha1/home/dargen3/miniconda3/bin/python3.8 mach.py " \
               f" --mode parameterization " \
               f" --chg_method {chg_method} " \
               f" --percent_par {percent_par} " \
@@ -56,6 +61,6 @@ def parameterization_meta(sdf_file: str,
     system(f"ssh dargen3@nympha.metacentrum.cz "
            f"\"export PBS_SERVER=cerit-pbs.cerit-sc.cz; "
            f"cd /storage/praha1/home/dargen3/mach/para_submit; "
-           f"./para_submit.sh '{command}' {data_dir} -l select=1:ncpus={cpu}:mem={RAM}gb:scratch_local={RAM}gb:cluster=zenon  -l walltime={walltime}:00:00;"
+           f"./para_submit.sh '{command}' {data_dir} -l select=1:ncpus={cpu}:mem={RAM}gb:scratch_local={RAM}gb:cluster=zenon  -l walltime={walltime}:00:00 ;" 
            f"cd .. ; cp -r mach.py modules/ {data_dir}/source_code/ ; rm -r {data_dir}/source_code/modules/__pycache__\"")
     print(colored("ok\n", "green"))

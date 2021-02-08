@@ -1,5 +1,5 @@
 from numba.experimental import jitclass
-from numba.core.types import string, uint32, float32, uint16, int16, ListType
+from numba.core.types import string, uint32, float32, uint16, int16, ListType, float64
 import numpy as np
 
 @jitclass({"name": string,
@@ -12,10 +12,11 @@ import numpy as np
            "bonds_srepr": ListType(string),
            "distance_matrix": float32[:, :],
            "bonds": uint32[:, :],
+           "formal_chgs": float64[:],
            "ref_chgs": float32[:],
            "emp_chgs": float32[:]})
 class Molecule:
-    def __init__(self, name, num_of_ats, num_of_bonds, ats_coordinates, ats_srepr, bonds, bonds_srepr):
+    def __init__(self, name, num_of_ats, num_of_bonds, ats_coordinates, ats_srepr, bonds, bonds_srepr, formal_chgs):
         self.name = name
         self.num_of_ats = num_of_ats
         self.num_of_bonds = num_of_bonds
@@ -23,6 +24,7 @@ class Molecule:
         self.ats_srepr = ats_srepr
         self.bonds = bonds
         self.bonds_srepr = bonds_srepr
+        self.formal_chgs = formal_chgs
 
     @property
     def total_chg(self):

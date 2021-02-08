@@ -40,18 +40,18 @@ def local_minimization(set_of_mols_par: SetOfMolecules,
                        chg_method: ChargeMethod,
                        initial_params: np.array) -> namedtuple:
 
-    #print("local minimization termination errrorororor!!")
-    #return namedtuple("chgs", ["params",
-    #                         "obj_val",
-    #                         "loc_min_courses"])(initial_params,
-    #                                             0,
-    #                                             [[0,0,0]])
+    # print("local minimization termination errrorororor!!") # dopsat do args num of ites
+    # return namedtuple("chgs", ["params",
+    #                       "obj_val",
+    #                       "loc_min_courses"])(initial_params,
+    #                                           0,
+    #                                           [[0,0,0]])
 
     loc_min_course = []
     res = minimize(objective_function,
                    initial_params,
                    method="SLSQP",
-                   options={"maxiter": 10000000, "ftol": 1e-10},
+                   options={"maxiter": 100000000000, "ftol": 1e-10},
                    args=(chg_method, set_of_mols_par, loc_min_course))
     return namedtuple("chgs", ["params",
                                "obj_val",
@@ -219,6 +219,9 @@ def objective_function(params: np.array,
     obj_eval += 1
 
     chg_method.params_vals = params
+
+
+
     try:
         emp_chgs = chg_method.calculate(set_of_mols)
     except (np.linalg.LinAlgError, ZeroDivisionError) as e:
@@ -237,6 +240,84 @@ def objective_function(params: np.array,
     return objective_val
 
 
+    # from scipy.stats import pearsonr
+    #
+    # def pear():
+    #     ats_types_pear = np.empty(len(chg_method.ats_types))
+    #
+    #     for index, symbol in enumerate(chg_method.ats_types):
+    #         # print(symbol, pearsonr(emp_chgs[set_of_mols.all_ats_ids == index * chg_method.params_per_at_type], set_of_mols.ref_ats_types_chgs[symbol])[0])
+    #
+    #         ats_types_pear[index] = -pearsonr(emp_chgs[set_of_mols.all_ats_ids == index * chg_method.params_per_at_type], set_of_mols.ref_ats_types_chgs[symbol])[0]
+    #     return ats_types_pear
+    #
+    # d = np.max(pear())
+    # # print(d)
+    # return  d + objective_val/2
+
+    return objective_val
+
+
+
+
+
+def objective_function_tomas(params: np.array,
+                             chg_method: ChargeMethod,
+                             set_of_mols: SetOfMolecules,
+                             obj_vals: list = None) -> float:
+
+    global obj_eval, obj_eval_error
+
+    def _rmsd_calculation(emp_chg: np.array) -> tuple:
+
+        ats_types_rmsd = np.empty(len(chg_method.ats_types))
+        for index, symbol in enumerate(chg_method.ats_types):
+            differences = emp_chg[set_of_mols.all_ats_ids == index * chg_method.params_per_at_type] - set_of_mols.ref_ats_types_chgs[symbol]
+            ats_types_rmsd[index] = np.sqrt(np.mean(np.abs(differences) ** 2))
+        total_mols_rmsd = 0
+        index = 0
+        for mol in set_of_mols.mols:
+            new_index = index + mol.num_of_ats
+            differences = emp_chg[index: new_index] - mol.ref_chgs
+            total_mols_rmsd += np.sqrt(np.mean(np.abs(differences) ** 2))
+            index = new_index
+        return ats_types_rmsd, total_mols_rmsd / set_of_mols.num_of_mols
+
+    obj_eval += 1
+
+    chg_method.params_vals = params
+
+
+
+    try:
+        emp_chgs = chg_method.calculate(set_of_mols)
+    except (np.linalg.LinAlgError, ZeroDivisionError) as e:
+        obj_eval_error += 1
+        print(e)
+        return 1000.0
+
+    ats_types_rmsd, rmsd = _rmsd_calculation(emp_chgs)
+    objective_val = rmsd + np.mean(ats_types_rmsd)
+    if np.isnan(objective_val):
+        return 1000.0
+
+    if isinstance(obj_vals, list):
+        obj_vals.append(objective_val)
+    print("    Total RMSD: {}    Worst RMSD: {}".format(str(rmsd)[:8], str(np.max(ats_types_rmsd))[:8]), end="\r")
+
+
+    from scipy.stats import pearsonr
+
+    def pear():
+        ats_types_pear = np.empty(len(chg_method.ats_types))
+        for index, symbol in enumerate(chg_method.ats_types):
+            ats_types_pear[index] = pearsonr(emp_chgs[set_of_mols.all_ats_ids == index * chg_method.params_per_at_type], set_of_mols.ref_ats_types_chgs[symbol])[0]
+        return ats_types_pear
+
+    total_pearson = pearsonr(emp_chgs, set_of_mols.ref_chgs)[0]
+
+    return rmsd, max(ats_types_rmsd), total_pearson, np.min(pear()),
+
 def parameterize(sdf_file: str,
                  ref_chgs_file: str,
                  chg_method: str,
@@ -247,9 +328,41 @@ def parameterize(sdf_file: str,
                  num_of_samples: int,
                  num_of_candidates: int,
                  subset: int,
+                 seed: int,
                  data_dir: str,
                  rewriting_with_force: bool,
                  git_hash: str = None):
+
+
+    # #1) celá sada molekul, ruzné samplování(5seedu), 1000000 samplů
+    # chg_method = getattr(import_module("modules.chg_methods"), chg_method)()
+    # ats_types_pattern = chg_method.load_params(params_file, ats_types_pattern)
+    # set_of_mols = create_set_of_mols(sdf_file, ats_types_pattern)
+    # set_of_mols.emp_chgs_file = f"{data_dir}/output_files/empirical.chg"
+    # chg_method.prepare_params_for_par(set_of_mols)
+    # add_chgs(set_of_mols, ref_chgs_file, "ref_chgs")
+    # create_method_data(chg_method, set_of_mols)
+    # print("    Sampling...")
+    # samples = lhs(num_of_samples, chg_method.params_bounds)
+    #
+    # print("    Calculating of objective function for samples...")
+    #
+    # from time import time
+    #
+    # # start = time()
+    # samples_rmsd = [objective_function_tomas(sample, chg_method, set_of_mols) for sample in samples]
+    # # print(time()-start)
+    # import csv
+    # with open(f"CCD_gen_sampling_seed-{seed}.csv", 'w') as outcsv:
+    #     # configure writer to write standard csv file
+    #     writer = csv.writer(outcsv, delimiter=',')
+    #     writer.writerow(['rmsd', 'worst at. type rmsd', 'pearson', "worst at. type pearson"])
+    #     for item in samples_rmsd:
+    #         # Write item to outcsv
+    #         writer.writerow([item[0], item[1], item[2], item[3]])
+    #
+    # exit()
+    # # 1 - end
 
     start_time = date.now()
     control_and_copy_input_files(data_dir,
@@ -263,7 +376,7 @@ def parameterize(sdf_file: str,
     chg_method.prepare_params_for_par(set_of_mols)
     add_chgs(set_of_mols, ref_chgs_file, "ref_chgs")
 
-    set_of_mols_par, set_of_mols_val = create_80_20(set_of_mols, percent_par)
+    set_of_mols_par, set_of_mols_val = create_80_20(set_of_mols, percent_par, seed)
     subset_of_mols, min_subset_of_mols = create_par_val_set(set_of_mols_par,
                                                             subset)
 
@@ -289,14 +402,42 @@ def parameterize(sdf_file: str,
     print(c.most_common())
     exit()"""
 
-    # chg_method.average_charges = np.zeros(len(chg_method.ats_types)*3)
-    # for index, at_type in enumerate(chg_method.ats_types):
-    #
-    #     chg_method.average_charges[index*3] = np.mean(set_of_mols_par.ref_ats_types_chgs[at_type])
-    #
-    # print([chg_method.average_charges[x*3] for x in range(len(chg_method.ats_types))])
-    # print(chg_method.ats_types)
-    # exit()
+    chg_method.average_charges = np.zeros(len(chg_method.ats_types)*3)
+    for index, at_type in enumerate(chg_method.ats_types):
+
+        chg_method.average_charges[index*3] = np.mean(set_of_mols_par.ref_ats_types_chgs[at_type])
+
+    print([chg_method.average_charges[x*3] for x in range(len(chg_method.ats_types))])
+
+    print(chg_method.ats_types)
+    exit()
+    if str(chg_method) == "SQEqa":
+        def add_av_ref_charges(set_of_mols_a):
+            average_charges_list = []
+            for mol in set_of_mols_a.mols:
+                average_charges_list.extend(molecules_average_charges[mol.name])
+            set_of_mols_a.ref_av_charges = np.array(average_charges_list, dtype=np.float64)
+
+
+
+        set_of_mols_plain_ba = create_set_of_mols(sdf_file, "plain-ba")
+        add_chgs(set_of_mols_plain_ba, ref_chgs_file, "ref_chgs")
+        average_charges = {}
+        for at_type in set_of_mols_plain_ba.ats_types:
+            average_charges[at_type] = np.mean(set_of_mols_plain_ba.ref_ats_types_chgs[at_type])
+
+        molecules_average_charges = {}
+        for molecule in set_of_mols_plain_ba.mols:
+            data = []
+            for atom in molecule.ats_srepr:
+                data.append(average_charges[atom])
+            molecules_average_charges[molecule.name] = data
+        add_av_ref_charges(set_of_mols)
+        add_av_ref_charges(set_of_mols_par)
+        add_av_ref_charges(subset_of_mols)
+        add_av_ref_charges(min_subset_of_mols)
+        add_av_ref_charges(set_of_mols_val)
+
 
     if optimization_method == "local_minimization":
         par_results = local_minimization(set_of_mols_par,
@@ -314,17 +455,23 @@ def parameterize(sdf_file: str,
                                           num_of_samples,
                                           num_of_candidates,
                                           chg_method)
-    # elif optimization_method == "bayes":
-    #     optimizer = BayesianOptimization(f=objective_function,
-    #                                      pbounds=pbounds,
-    #         verbose=2,  # verbose = 1 prints only when a maximum is observed, verbose = 0 is silent
-    #         random_state=1,
-    #     )
-    #
-    #     optimizer.maximize(
-    #         init_points=2,
-    #         n_iter=3,
-    #     )
+    elif optimization_method == "bayesian_optimization":
+        from skopt import gp_minimize
+
+        # res = minimize(objective_function,
+        #                initial_params,
+        #                method="SLSQP",
+        #                options={"maxiter": 10000000, "ftol": 1e-10},
+        #                args=(chg_method, set_of_mols_par, loc_min_course))
+        # chg_method: ChargeMethod,
+        # set_of_mols: SetOfMolecules,
+        # obj_vals: list = None
+
+        from functools import partial
+        f = partial(objective_function, chg_method=chg_method, set_of_mols=subset_of_mols)
+        res = gp_minimize(f, chg_method.params_bounds, n_calls=200, n_initial_points=100)
+
+
 
     print(colored("\x1b[2Kok\n", "green"))
 

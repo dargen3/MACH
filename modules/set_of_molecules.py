@@ -3,7 +3,7 @@ from inspect import stack, getmodule
 from sys import exit
 
 import numpy as np
-from numba.core.types import ListType, DictType, float32, int16, int64, string
+from numba.core.types import ListType, DictType, float32, float64, int16, int64, string
 from numba.experimental import jitclass
 from numba.typed import List, Dict
 from scipy.spatial.distance import cdist
@@ -23,6 +23,7 @@ array32 = float32[:]
            "num_of_bonds": int64,
            "ref_chgs": float32[:],
            "emp_chgs": float32[:],
+           "ref_av_charges": float64[:],  # mozna smazat!
            "emp_ats_types_chgs": DictType(string, float32[:]),
            "ref_ats_types_chgs": DictType(string, float32[:]),
            "all_ats_ids": int16[:],
@@ -80,6 +81,30 @@ def create_set_of_mols(sdf_file: str,
                 return List([f"{symbol}/{''.join(sorted(bonded_ats))}"
                              for symbol, bonded_ats in zip(symbols, bonded_ats)])
 
+            def _create_hbo_ba() -> list:
+                bonded_ats = [[] for _ in range(num_of_ats)]
+                for bonded_at1, bonded_at2, _ in bonds:
+                    bonded_ats[bonded_at1].append(symbols[bonded_at2])
+                    bonded_ats[bonded_at2].append(symbols[bonded_at1])
+                return List([f"{symbol}/{''.join(sorted(bonded_ats))}"
+                             for symbol, bonded_ats in zip(_create_at_highest_bond(), bonded_ats)])
+
+            def _create_at_bonded_at_bonded_at() -> list:
+                bonded_ats = [[] for _ in range(num_of_ats)]
+                for bonded_at1, bonded_at2, _ in bonds:
+                    bonded_ats[bonded_at1].append(symbols[bonded_at2])
+                    bonded_ats[bonded_at2].append(symbols[bonded_at1])
+
+                bonded_bonded_ats = [[] for _ in range(num_of_ats)]
+                for bonded_at1, bonded_at2, _ in bonds:
+                    bonded_bonded_ats[bonded_at1].extend(bonded_ats[bonded_at2])
+                    bonded_bonded_ats[bonded_at1].remove(symbols[bonded_at1])
+                    bonded_bonded_ats[bonded_at2].extend(bonded_ats[bonded_at1])
+                    bonded_bonded_ats[bonded_at2].remove(symbols[bonded_at2])
+
+                return List([f"{symbol}/{''.join(sorted(bonded_ats))}/{''.join(sorted(bonded_bonded_ats))}"
+                             for symbol, bonded_ats, bonded_bonded_ats in zip(symbols, bonded_ats, bonded_bonded_ats)])
+
             # create atoms_representation
             # plain (plain atom) = C, H, N, ...
             # hbo (highest bond order) = C/1, C/2, H/1, N/3, ...
@@ -89,15 +114,21 @@ def create_set_of_mols(sdf_file: str,
                 ats_srepr = List([at for at in symbols])
             elif ats_types_pattern == "hbo":
                 ats_srepr = _create_at_highest_bond()
-            elif ats_types_pattern in ["plain-ba", "plain-ba-sb", "plain-ba-e"]:
+            elif ats_types_pattern in ["plain-ba", "plain-ba-sb"]:
                 ats_srepr = _create_at_bonded_at()
-
-            if ats_types_pattern == "plain-ba-e":
-                for bonded_at1, bonded_at2, _ in bonds:
-                    if ats_srepr[bonded_at1] == "O/C" and ats_srepr[bonded_at2] == "C/COO":
-                        ats_srepr[bonded_at1] = "O/Cx"
-                    elif ats_srepr[bonded_at2] == "O/C" and ats_srepr[bonded_at1] == "C/COO":
-                        ats_srepr[bonded_at2] = "O/Cx"
+            elif ats_types_pattern == "hbo-ba":
+                ats_srepr = _create_hbo_ba()
+            elif ats_types_pattern == "plain-ba-hbo":
+                ats_srepr = List([plain_ba_srepr + "..." + hbo_srepr for plain_ba_srepr, hbo_srepr in zip(_create_at_bonded_at(), _create_at_highest_bond())])
+            elif ats_types_pattern == "plain-ba-ba":
+                ats_srepr = _create_at_bonded_at_bonded_at()
+            #
+            # if ats_types_pattern == "plain-ba":
+            #     for bonded_at1, bonded_at2, _ in bonds:
+            #         if ats_srepr[bonded_at1] == "O/C" and ats_srepr[bonded_at2] == "C/COO":
+            #             ats_srepr[bonded_at1] = "O/Cx"
+            #         elif ats_srepr[bonded_at2] == "O/C" and ats_srepr[bonded_at1] == "C/COO":
+            #             ats_srepr[bonded_at2] = "O/Cx"
 
 
             # create bonds_representation
@@ -119,19 +150,45 @@ def create_set_of_mols(sdf_file: str,
                 return b - 1, a - 1
             return a - 1, b - 1
 
+        def load_formal_charge_from_line(line: list) -> int: # asi upravit pro kovy a pro V3000
+            if len(line) not in [9, 16]:
+                return 0 # V3000
+            chg = int(line[5])
+            if chg != 0:
+                chg = -int(chg)+4
+
+            if chg == 0 and len(line) == 16:
+                valence = line[9]
+                if valence != "0":
+                    try:
+                        chg = {"N4":1, "O1": -1}[line[3]+valence]
+                    except KeyError:
+                        print(line)
+                        return 0
+            #
+            # if chg != 0:
+            #     print(chg, line)
+            return chg
+
+
+
+
         sdf_type = mol_data[3][-5:]
+        symbols, ats_coordinates, bonds, formal_chgs = [], [], [], []
+
         if sdf_type == "V2000":
             name = mol_data[0]
             info_line = mol_data[3]
             num_of_ats = int(info_line[:3])
             num_of_bonds = int(info_line[3:6])
-            symbols, ats_coordinates, bonds = [], [], []
 
             # read atoms lines
             for at_line in mol_data[4: num_of_ats + 4]:
-                c1, c2, c3, symbol = at_line.split()[:4]
+                s_line = at_line.split()
+                c1, c2, c3, symbol = s_line[:4]
                 ats_coordinates.append([float(c1), float(c2), float(c3)])
                 symbols.append(symbol)
+                formal_chgs.append(load_formal_charge_from_line(s_line))
 
             # read bond lines
             for bond_line in mol_data[num_of_ats + 4: num_of_ats + num_of_bonds + 4]:
@@ -143,13 +200,13 @@ def create_set_of_mols(sdf_file: str,
             info_line = mol_data[5].split()
             num_of_ats = int(info_line[3])
             num_of_bonds = int(info_line[4])
-            symbols, ats_coordinates, bonds = [], [], []
 
             # read atoms lines
             for at_line in mol_data[7: num_of_ats + 7]:
                 line = at_line.split()
                 ats_coordinates.append(np.array([float(line[4]), float(line[5]), float(line[6])], dtype=np.float32))
                 symbols.append(line[3])
+                formal_chgs.append(load_formal_charge_from_line(line))
 
             # read bond lines
             for bond_line in mol_data[num_of_ats + 9: num_of_ats + num_of_bonds + 9]:
@@ -169,12 +226,47 @@ def create_set_of_mols(sdf_file: str,
                         np.array(ats_coordinates, dtype=np.float32),
                         ats_srepr,
                         np.array(bonds, dtype=np.int32),
-                        bonds_srepr)
+                        bonds_srepr,
+                        np.array(formal_chgs, dtype=np.float64))
 
     print(f"Loading of set of molecules from {sdf_file}...")
     mols_data = [x.splitlines() for x in open(sdf_file, "r").read().split("$$$$\n")][:-1]
     mols = List([load_sdf(mol_data)
                  for mol_data in mols_data])
+
+    if ats_types_pattern == "plain-ba-hbo":
+        c = Counter(at_srepr.split("...")[0] for mol in mols for at_srepr in mol.ats_srepr)
+
+
+        cb_list = []
+        for mol in mols:
+            for bond_type in mol.bonds_srepr:
+                a1, a2, type = bond_type.split("-")
+                cb_list.append("-".join([a1.split("...")[0], a2.split("...")[0], type]))
+        cb = Counter(cb_list)
+        print(cb)
+
+        for mol in mols:
+            final = []
+            for at_type in mol.ats_srepr:
+                plain_ba_r, hbo_r = at_type.split("...")
+                if c[plain_ba_r] > 10:
+                    final.append(plain_ba_r)
+                else:
+                    final.append(hbo_r)
+            mol.ats_srepr = List(final)
+
+            final_b = []
+            for bond_type in mol.bonds_srepr:
+                a1, a2, type = bond_type.split("-")
+                if cb["-".join([a1.split("...")[0], a2.split("...")[0], type])] > 10:
+                    final_b.append("-".join([a1.split("...")[0], a2.split("...")[0], type]))
+                else:
+                    final_b.append("-".join([a1.split("...")[1], a2.split("...")[1], type]))
+            mol.bonds_srepr = List(final_b)
+
+
+
     ats_types = List(sorted(set([at for mol in mols for at in mol.ats_srepr]))) # prepsat po fixu
     bonds_types = List(sorted(set([bond for mol in mols for bond in mol.bonds_srepr]))) # prepsat po fixu
     set_of_mols = SetOfMolecules(mols,
@@ -213,7 +305,7 @@ def set_of_mols_info(sdf_file: str,
     bonds_counter = Counter([bond for mol in set_of_mols.mols for bond in mol.bonds_srepr]).most_common()
     print("\n\nBonds types:")
     for bond_type, number in bonds_counter:
-        if number < 5:
+        if number < 20:
             mols_with_bond_type = [mol.name for mol in set_of_mols.mols if bond_type in mol.bonds_srepr]
             print(f"    {bond_type:>8}: {number:<11}    {'; '.join(mols_with_bond_type)}")
         else:
@@ -245,11 +337,41 @@ def create_method_data(chg_method: "ChargeMethod",
 
 
 def create_80_20(set_of_mols: SetOfMolecules,
-                 parameterize_percent: int):
+                 parameterize_percent: int,
+                 seed: int):
     percent_index_80 = int((set_of_mols.num_of_mols/100)*parameterize_percent)
+
+
+    np.random.seed(1)  #Odkomentovat!!!!!!
     mols = np.random.permutation(set_of_mols.mols)
+    np.random.seed(seed if seed != 0 else None)
     mols_80 = mols[:percent_index_80]
     mols_20 = mols[percent_index_80:]
+
+    # original_names = [mol.name for mol in set_of_mols.mols]
+    #
+    #
+    # from os.path import basename
+    # names_parameterization_m = []
+    # with open(f"modules/data_clanek_smazat/{basename(set_of_mols.sdf_file).split('.')[0]}_parameterization.log", "r") as names_file:
+    #     for line in names_file.readlines()[1:]:
+    #         names_parameterization_m.append(line.split(",")[0])
+    #
+    # names_validation_m = []
+    # with open(f"modules/data_clanek_smazat/{basename(set_of_mols.sdf_file).split('.')[0]}_validation.log", "r") as names_file:
+    #     for line in names_file.readlines()[1:]:
+    #         names_validation_m.append(line.split(",")[0])
+    #
+    # mols_80 = List([set_of_mols.mols[original_names.index(name)] for name in names_parameterization_m])
+    # mols_20 = List([set_of_mols.mols[original_names.index(name)] for name in names_validation_m])
+    # # potud smazat
+    #
+
+
+
+
+
+
 
     ats_types_80 = List(sorted(set([at for mol in mols_80 for at in mol.ats_srepr])))  # po fixu přepsat
     bonds_types_80 = List(sorted(set([bond for mol in mols_80 for bond in mol.bonds_srepr])))  # po fixu přepsat
@@ -261,6 +383,7 @@ def create_80_20(set_of_mols: SetOfMolecules,
     ats_types_20 = List(sorted(set([at for mol in mols_20 for at in mol.ats_srepr])))  # po fixu přepsat
     bonds_types_20 = List(sorted(set([bond for mol in mols_20 for bond in mol.bonds_srepr])))  # po fixu přepsat
     set_of_mols_20 = SetOfMolecules(List(mols_20), set_of_mols.sdf_file, ats_types_20, bonds_types_20)
+
 
     set_of_mols_20.ref_chgs_file = set_of_mols.ref_chgs_file
     set_of_mols_20.emp_chgs_file = set_of_mols.emp_chgs_file
@@ -388,6 +511,14 @@ def add_chgs(set_of_mols: SetOfMolecules,
     _create_chgs_attr(set_of_mols, type_of_chgs)
     print(colored("ok\n", "green"))
 
+    # print("test")
+    # for molecule in set_of_mols.mols:
+    #     diff = abs(molecule.total_chg-sum(molecule.formal_chgs))
+    #
+    #     print(molecule.total_chg, molecule.formal_chgs, diff)
+    #     if diff > 0.01:
+    #         print("ERRRORRRR")
+    #         exit()
 
 def write_chgs_to_file(chgs: np.array,
                        set_of_mol: SetOfMolecules):
