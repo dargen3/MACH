@@ -10,6 +10,7 @@ from numba import jit
 from numpy import random
 from termcolor import colored
 from warnings import filterwarnings
+from datetime import datetime
 
 filterwarnings("ignore")
 
@@ -25,6 +26,8 @@ if __name__ == '__main__':
         numba_seed(args.random_seed)
     print(colored(f"MACH is running with mode: {args.mode}\n", "blue"))
 
+    data_dir = f"{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}_{args.mode}_{args.chg_method}_{args.sdf_file.split('/')[-1][:-4]}_{args.ats_types_pattern}"
+
     if args.mode == "set_of_molecules_info":
         set_of_mols_info(args.sdf_file,
                          args.ats_types_pattern)
@@ -33,9 +36,7 @@ if __name__ == '__main__':
         calculate_chgs(args.sdf_file,
                        args.chg_method,
                        args.params_file,
-                       args.data_dir,
-                       args.rewriting_with_force)
-
+                       data_dir)
 
     elif args.mode == "parameterization":
         parameterize(args.sdf_file,
@@ -48,20 +49,17 @@ if __name__ == '__main__':
                      args.num_of_samples,
                      args.num_of_candidates,
                      args.subset,
+                     args.min_subset,
+                     args.maxiter,
                      args.random_seed,
-                     args.data_dir,
-                     args.rewriting_with_force,
-                     args.git_hash)
+                     data_dir)
 
     elif args.mode == "comparison":
         comparison(args.sdf_file,
                    args.ref_chgs_file,
                    args.emp_chgs_file,
                    args.ats_types_pattern,
-                   args.data_dir,
-                   args.rewriting_with_force)
-
-
+                   data_dir)
 
     elif args.mode == "parameterization_meta":
         parameterization_meta(args.sdf_file,
@@ -74,8 +72,7 @@ if __name__ == '__main__':
                               args.num_of_samples,
                               args.num_of_candidates,
                               args.subset,
-                              args.cpu,
                               args.RAM,
                               args.walltime,
                               args.random_seed,
-                              args.data_dir)
+                              data_dir)

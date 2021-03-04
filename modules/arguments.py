@@ -1,8 +1,5 @@
 import argparse
-from datetime import datetime
-
 import argcomplete
-import git
 from termcolor import colored
 
 
@@ -17,50 +14,46 @@ def load_arguments():
     parser.add_argument("--ats_types_pattern",
                         help="Use for comparison and set_of_molecules only. "
                              "Define used atomic classifier.",
-                        choices=("plain", "hbo", "plain-ba", "plain-ba-sb", "hbo-ba", "plain-ba-ba"),
+                        choices=("plain", "hbo", "ba", "ba2"),
                         default="hbo")
-    parser.add_argument("--cpu",
-                        help="Use for \"guided minimization\" optimization method only. "
-                             "Define number of used CPU for parameterization.",
-                        default=1,
-                        type=int)
-    parser.add_argument("--data_dir",
-                        help="Defined directory stores all computed data.",
-                        default=None)
     parser.add_argument("--emp_chgs_file",
                         help="File to store calculated charges or file with charges for comparison.")
-    parser.add_argument("-f", "--rewriting_with_force",
-                        help="All MACH output files and directories will be rewritten.",
-                        action="store_true")
-    parser.add_argument("--git_hash",
-                        help="For internal usage only.")
     parser.add_argument("--chg_method",
                         help="Empirical method for calculation or parameterization partial atomic charges.",
-                        choices=("EEM", "EQEq", "SQE", "SQEq0", "SQEqp", "SQEqa", "QEq_Louwen_Vogt", "QEq_Nisimoto_Mataga", "QEq_Nisimoto_Mataga_Wiess", "QEq_Ohno", "QEq_Ohno_Klopman", "QEq_Dasgupta_Huzinaga"))
+                        choices=("EEM", "EQEq", "SQE", "SQEq0", "SQEqp", "SQEqpc", "QEq_Louwen_Vogt",
+                                 "QEq_Nisimoto_Mataga", "QEq_Nisimoto_Mataga_Wiess", "QEq_Ohno",
+                                 "QEq_Ohno_Klopman", "QEq_Dasgupta_Huzinaga"))
+    parser.add_argument("--maxiter",
+                        help="Use for local minimization only. "
+                             "Define maximum number of iterations.",
+                        default=10000000,
+                        type=int)
     parser.add_argument("--num_of_candidates",
-                        help="Use for \"guided minimization\" optimization method only. "
+                        help="Use for optGM optimization method only. "
                              "Define number of used candidates.",
                         default=3,
                         type=int)
     parser.add_argument("--num_of_samples",
-                        help="Use for \"guided minimization\" optimization method only. "
+                        help="Use for optGM optimization method only. "
                              "Define number of used initial samples.",
                         default=10000,
                         type=int)
+    parser.add_argument("--min_subset",
+                        help="Use for optGM optimization method only. "
+                             "Minimal subset of molecules that contains n atoms of each atom type "
+                             "is used for parameterization.",
+                        default=1,
+                        type=int)
     parser.add_argument("--optimization_method",
                         help="Optimization method for parameterization.",
-                        choices=("local_minimization", "guided_minimization", "opt_guided_minimization", "bayesian_optimization"),
-                        default="opt_guided_minimization")
+                        choices=("local_minimization", "optGM", "GDMIN"),
+                        default="optGM")
     parser.add_argument("--subset",
-                        help="Use for parameterization mode only. "
-                             "Minimal subset of molecules that contains n atoms of each atom type "
-                             "is used for parameterization. Other molecules are used for validation.",
+                        help="Use for optGM optimization method only. "
+                             "Subset of molecules that contains n atoms of each atom type "
+                             "is used for parameterization.",
                         default=10,
                         type=int)
-    parser.add_argument("--parameterize_atoms",
-                        help="Use for parameterization mode only."
-                             "Define space of parameters.",
-                        default="")
     parser.add_argument("--params_file",
                         help="File with parameters.")
     parser.add_argument("--percent_par",
@@ -91,9 +84,6 @@ def load_arguments():
     argcomplete.autocomplete(parser)
     args = parser.parse_args()
 
-    if not args.data_dir:
-        args.data_dir = f"{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}_{args.mode}_{args.chg_method}_{args.sdf_file.split('/')[-1][:-4]}_{args.ats_types_pattern}"
-
     if args.mode == "set_of_molecules_info":
         if args.sdf_file is None:
             parser.error("For set_of_molecules_info mode choose --sdf_file.")
@@ -109,7 +99,8 @@ def load_arguments():
         if any(arg is None for arg in [args.sdf_file,
                                        args.ref_chgs_file,
                                        args.emp_chgs_file]):
-            parser.error("For comparison mode choose --sdf_file, --emp_chgs_file and --ref_chgs_file.")
+            parser.error("For comparison mode choose --sdf_file, "
+                         "--emp_chgs_file and --ref_chgs_file.")
 
     elif args.mode in ["parameterization", "parameterization_meta"]:
         if any(arg is None for arg in [args.sdf_file,
@@ -117,17 +108,6 @@ def load_arguments():
                                        args.chg_method]):
             parser.error("For parameterization mode choose --sdf_file, "
                          "--ref_chgs_file and --chg_method.")
-
-        if not args.git_hash:
-            args.git_hash = git.Repo(search_parent_directories=True).head.object.hexsha
-
-    if args.subset < 1:
-        parser.error("Error! subset value must be higher then 0!")
-
-    if args.parameterize_atoms:
-        args.parameterize_atoms = args.parameterize_atoms.split(",")
-        print(args.parameterize_atoms)
-        exit()
 
     print(colored("ok\n", "green"))
     return args

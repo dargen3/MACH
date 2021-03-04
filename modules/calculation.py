@@ -10,14 +10,12 @@ from .set_of_molecules import create_set_of_mols, create_method_data, write_chgs
 def calculate_chgs(sdf_file: str,
                    chg_method: str,
                    params_file: str,
-                   data_dir: str,
-                   rewriting_with_force: bool):
+                   data_dir: str):
 
     control_and_copy_input_files(data_dir,
-                                 (sdf_file, params_file),
-                                 rewriting_with_force)
+                                 (sdf_file, params_file))
 
-    chg_method = getattr(import_module("modules.chg_methods"), chg_method)()
+    chg_method = getattr(import_module(f"modules.chg_methods.{chg_method}"), chg_method)()
     ats_types_pattern = chg_method.load_params(params_file)
     set_of_mols = create_set_of_mols(sdf_file, ats_types_pattern)
     set_of_mols.emp_chgs_file = f"{data_dir}/output_files/empirical.chg"

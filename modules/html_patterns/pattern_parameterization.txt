@@ -152,6 +152,7 @@ a.sort-by:after {{
 RMSD</th><th>
 Maximum deviation</th><th>
 Average deviation</th><th>
+Pearson</th><th>
 Pearson<sup>2</sup></th><th>
 Number of atoms</th></tr>
 <tr><td class="tdhoverable">Parameterization</td><td>{}</td></tr>
@@ -164,6 +165,7 @@ Number of atoms</th></tr>
 RMSD</th><th>
 Maximum deviation</th><th>
 Average deviation</th><th>
+Pearson</th><th>
 Pearson<sup>2</sup></th><th>
 Number of molecules</th><th>
 Smallest molecule atoms</th><th>
@@ -181,6 +183,7 @@ Average number of atoms</th></tr>
         <th onclick="sortTable(1, 'atomic_types', 'num')"><a class="sort-by">RMSD</th>
         <th onclick="sortTable(2, 'atomic_types', 'num')"><a class="sort-by">Maximum deviation</th>
         <th onclick="sortTable(3, 'atomic_types', 'num')"><a class="sort-by">Average deviation</th>
+        <th onclick="sortTable(4, 'atomic_types', 'num')"><a class="sort-by">Pearson</th>
         <th onclick="sortTable(4, 'atomic_types', 'num')"><a class="sort-by">Pearson<sup>2</sup></th>
         <th onclick="sortTable(5, 'atomic_types', 'num')"><a class="sort-by">Number of atoms</th>
         <th onclick="sortTable(6, 'atomic_types', 'num')"><a class="sort-by">%</th>
@@ -197,7 +200,8 @@ Average number of atoms</th></tr>
         <th onclick="sortTable(1, 'atomic_types_validation', 'num')"><a class="sort-by">RMSD</th>
         <th onclick="sortTable(2, 'atomic_types_validation', 'num')"><a class="sort-by">Maximum deviation</th>
         <th onclick="sortTable(3, 'atomic_types_validation', 'num')"><a class="sort-by">Average deviation</th>
-        <th onclick="sortTable(4, 'atomic_types_validation', 'num')"><a class="sort-by">Pearson<sup>2</sup></th>
+        <th onclick="sortTable(4, 'atomic_types_validation', 'num')"><a class="sort-by">Pearson</th>
+                <th onclick="sortTable(4, 'atomic_types_validation', 'num')"><a class="sort-by">Pearson<sup>2</sup></th>
         <th onclick="sortTable(5, 'atomic_types_validation', 'num')"><a class="sort-by">Number of atoms</th>
         <th onclick="sortTable(6, 'atomic_types_validation', 'num')"><a class="sort-by">%</th>
       </thead>
@@ -263,9 +267,9 @@ Average number of atoms</th></tr>
 <a href = "molecules_parameterization.log">molecules_parameterization.log</a>
 <h3>Molecules logs file:</h3>
 <a href = "molecules_validation.log">molecules_validation.log</a>
-
-
-
+<br><br><br><br>
+<h2>Source code</h2>
+<a href = "../source_code">Source code</a>
 </div>
 
 <div id="Contact & Licence" class="tabcontent">

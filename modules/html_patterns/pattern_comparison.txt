@@ -146,6 +146,7 @@ a.sort-by:after {{
 <tr><th>RMSD</th><th>
 Maximum deviation</th><th>
 Average deviation</th><th>
+Pearson</th><th>
 Pearson<sup>2</sup></th><th>
 Number of atoms</th></tr>
 <tr><td>{}</td></tr>
@@ -156,6 +157,7 @@ Number of atoms</th></tr>
 <tr><th>RMSD</th><th>
 Maximum deviation</th><th>
 Average deviation</th><th>
+Pearson</th><th>
 Pearson<sup>2</sup></th><th>
 Number of molecules</th><th>
 Smallest molecule atoms</th><th>
@@ -172,7 +174,9 @@ Average number of atoms</th></tr>
         <th onclick="sortTable(1, 'atomic_types', 'num')"><a class="sort-by">RMSD</th>
         <th onclick="sortTable(2, 'atomic_types', 'num')"><a class="sort-by">Maximum deviation</th>
         <th onclick="sortTable(3, 'atomic_types', 'num')"><a class="sort-by">Average deviation</th>
+        <th onclick="sortTable(4, 'atomic_types', 'num')"><a class="sort-by">Pearson</th>
         <th onclick="sortTable(4, 'atomic_types', 'num')"><a class="sort-by">Pearson<sup>2</sup></th>
+
         <th onclick="sortTable(5, 'atomic_types', 'num')"><a class="sort-by">Number of atoms</th>
         <th onclick="sortTable(6, 'atomic_types', 'num')"><a class="sort-by">%</th>
       </thead>
@@ -213,7 +217,6 @@ Average number of atoms</th></tr>
 
 <div id="Files" class="tabcontent">
 <h2>Input files</h2>
-
 <h3>SDF file:</h3>
 <a href = "{}">{}</a>
 <h3>Empirical charges file:</h3>
@@ -224,6 +227,9 @@ Average number of atoms</th></tr>
 <h2>Output files</h2>
 <h3>Molecules logs file:</h3>
 <a href = "molecules.log">molecules.log</a>
+<br><br><br><br>
+<h2>Source code</h2>
+<a href = "../source_code">Source code</a>
 </div>
 
 <div id="Contact & Licence" class="tabcontent">

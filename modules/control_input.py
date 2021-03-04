@@ -6,18 +6,7 @@ from termcolor import colored
 
 
 def control_and_copy_input_files(data_dir: str,
-                                 files: tuple,
-                                 rewriting_with_force: bool):
-
-    print(f'Control presence of output directory {data_dir}...')
-    if path.isdir(data_dir):
-        if rewriting_with_force:
-            rmtree(data_dir)
-            print(f"    {data_dir} directory was deleted...")
-        else:
-            exit(colored(f"ERROR! {data_dir} directory is present. If you want to rewrite it"
-                         f"run MACH with -f or --rewriting_with_force option.\n", "red"))
-    print(colored("ok\n", "green"))
+                                 files: tuple):
 
     print('Control presence of input files... \n    {}'.format("\n    ".join([file for file in files])))
     for file in files:
