@@ -22,7 +22,6 @@ array32 = float32[:]
            "num_of_bonds": int64,
            "ref_chgs": float32[:],
            "emp_chgs": float32[:],
-           "ref_av_charges": float64[:],  # mozna smazat!
            "emp_ats_types_chgs": DictType(string, float32[:]),
            "ref_ats_types_chgs": DictType(string, float32[:]),
            "all_ats_ids": int16[:],
@@ -122,30 +121,16 @@ def create_set_of_mols(sdf_file: str,
 
             bonds_srepr = List([f"{'-'.join(sorted([ats_srepr[ba1], ats_srepr[ba2]]))}-{bond_type}"
                                 for ba1, ba2, bond_type in bonds])
+            # bonds_srepr = List(['-'.join(sorted([symbols[ba1], symbols[ba2]]))+"-1"
+            #                      for ba1, ba2, _ in bonds])
             return ats_srepr, bonds_srepr
+
 
         def _sort(a: int,
                   b: int) -> tuple:
             if a > b:
                 return b - 1, a - 1
             return a - 1, b - 1
-
-        def load_formal_charge_from_line(line: list) -> int:  # asi upravit pro kovy a pro V3000 - smazat v budoucnu
-            if len(line) not in [9, 16]:
-                return 0  # V3000
-            chg = int(line[5])
-            if chg != 0:
-                chg = -int(chg) + 4
-
-            if chg == 0 and len(line) == 16:
-                valence = line[9]
-                if valence != "0":
-                    try:
-                        chg = {"N4": 1, "O1": -1}[line[3] + valence]
-                    except KeyError:
-                        print(line)
-                        return 0
-            return chg
 
         sdf_type = mol_data[3][-5:]
         symbols, ats_coordinates, bonds, formal_chgs = [], [], [], []
@@ -162,7 +147,6 @@ def create_set_of_mols(sdf_file: str,
                 c1, c2, c3, symbol = s_line[:4]
                 ats_coordinates.append([float(c1), float(c2), float(c3)])
                 symbols.append(symbol)
-                formal_chgs.append(load_formal_charge_from_line(s_line))
 
             # read bond lines
             for bond_line in mol_data[num_of_ats + 4: num_of_ats + num_of_bonds + 4]:
@@ -180,13 +164,22 @@ def create_set_of_mols(sdf_file: str,
                 line = at_line.split()
                 ats_coordinates.append(np.array([float(line[4]), float(line[5]), float(line[6])], dtype=np.float32))
                 symbols.append(line[3])
-                formal_chgs.append(load_formal_charge_from_line(line))
 
             # read bond lines
             for bond_line in mol_data[num_of_ats + 9: num_of_ats + num_of_bonds + 9]:
                 line = bond_line.split()
                 at1, at2 = _sort(int(line[4]), int(line[5]))
                 bonds.append((at1, at2, int(line[3])))
+
+        # __rdkit__
+        bonds_r = []
+        for bond, r_bond in zip(bonds, rdkit_mols[name].GetBonds()):
+             if str(r_bond.GetBondType()) == "AROMATIC":
+                bonds_r.append((bond[0], bond[1], 4))
+             else:
+                bonds_r.append(bond)
+        bonds = bonds_r
+        # __rdkit__
 
         ats_srepr, bonds_srepr = _create_at_bonds_representation()
 
@@ -202,6 +195,11 @@ def create_set_of_mols(sdf_file: str,
                         np.array(bonds, dtype=np.int32),
                         bonds_srepr,
                         np.array(formal_chgs, dtype=np.float64))
+
+    # __rdkit__
+    from rdkit import Chem
+    rdkit_mols = {mol.GetProp("_Name"): mol for mol in Chem.SDMolSupplier(sdf_file,removeHs=False)}  # rdkit
+    # __rdkit__
 
     print(f"Loading of set of molecules from {sdf_file}...")
     mols_data = [x.splitlines() for x in open(sdf_file, "r").read().split("$$$$\n")][:-1]
@@ -263,50 +261,37 @@ def create_method_data(chg_method: "ChargeMethod",
                                dtype=np.int16) * len(chg_method.params["atom"]["names"])
         mol.distance_matrix = cdist(mol.ats_coordinates, mol.ats_coordinates).astype(np.float32)
 
-    if str(chg_method) == "SQEqpc":
-        ats_types_pattern_ba = "bahbo"
-        # ats_types_pattern_ba = "plain-ba"
-
-        set_of_mols_ba = create_set_of_mols(set_of_mols.sdf_file, ats_types_pattern_ba)
-
-        for mol in set_of_mols.mols:
-            for ba_mol in set_of_mols_ba.mols:
-                if mol.name == ba_mol.name:
-
-                    mol.ba_ats_ids = -np.ones((mol.num_of_ats, 4), dtype=np.int16)
-                    for i, at_srepr in enumerate(ba_mol.ats_srepr):
-                        if ats_types_pattern_ba == "bahbo":
-                            bonded_atoms = at_srepr.split("...")[1].split("~")
-                        elif ats_types_pattern_ba == "plain-ba":
-                            bonded_atoms = at_srepr.split("/")[1]
-                        for j, ba in enumerate(bonded_atoms):
-                            mol.ba_ats_ids[i][j] = chg_method.ats_types.index(ba) * len(
-                                chg_method.params["atom"]["names"])
-                    break
-
     if "bond" in chg_method.params:
         for mol in set_of_mols.mols:
             mol.bonds_ids = np.array([chg_method.bond_types.index(bond)
                                       for bond in mol.bonds_srepr],
                                      dtype=np.int16) + len(chg_method.params["atom"]["names"]) * len(chg_method.ats_types)
 
-    if "parameterization.py" in getmodule(stack()[1][0]).__file__:
+    if "parameterization.py" in getmodule(stack()[1][0]).__file__ or "cross_validation.py" in getmodule(stack()[1][0]).__file__:
         _create_chgs_attr(set_of_mols, "ref_chgs")
         set_of_mols.all_ats_ids = np.array([at_id for molecule in set_of_mols.mols
                                             for at_id in molecule.ats_ids], dtype=np.int16)
 
 
 def create_par_val_set(set_of_mols: SetOfMolecules,
-                       parameterize_percent: int,
-                       seed: int):
-    percent_index_par = int((set_of_mols.num_of_mols / 100) * parameterize_percent)
+                       seed: int,
+                       percent_par: int = None,
+                       cross_validation_iter: int = None):
 
     np.random.seed(1)  # parameterization and validation subset is always the same
     mols = np.random.permutation(set_of_mols.mols)
     np.random.seed(seed if seed != 0 else None)
 
-    mols_par = mols[:percent_index_par]
-    mols_val = mols[percent_index_par:]
+    if percent_par is not None:
+        percent_index_par = int((set_of_mols.num_of_mols / 100) * percent_par)
+        mols_par = mols[:percent_index_par]
+        mols_val = mols[percent_index_par:]
+
+    elif cross_validation_iter is not None:
+        val_start_index = int(cross_validation_iter * (set_of_mols.num_of_mols / 5))
+        val_end_index = int((cross_validation_iter + 1) * (set_of_mols.num_of_mols / 5))
+        mols_val = mols[val_start_index: val_end_index]
+        mols_par = np.concatenate((mols[0:val_start_index], mols[val_end_index: set_of_mols.num_of_mols]))
 
     ats_types_par = List(sorted(set([at for mol in mols_par for at in mol.ats_srepr])))  # po fixu přepsat
     bonds_types_par = List(sorted(set([bond for mol in mols_par for bond in mol.bonds_srepr])))  # po fixu přepsat

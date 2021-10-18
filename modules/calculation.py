@@ -26,10 +26,11 @@ def calculate_chgs(sdf_file: str,
     print(colored("ok\n", "green"))
 
     print("Calculation of charges... ")
-    try:
-        emp_chgs = chg_method.calculate(set_of_mols)
-    except (linalg.linalg.LinAlgError, ZeroDivisionError) as error:
-        print(error)
+    # try:
+    emp_chgs = chg_method.calculate(set_of_mols)
+    # except (linalg.linalg.LinAlgError, ZeroDivisionError) as error:
+    #     print(error)
+    #     print(colored("\n\n\n\n\nEEEEEEEEEEEEEEERRRRRRRRRRRRRROOOOOOOOOOOOOORRRRRRRRRR\n\n\n\n", "red"))
     print(colored("ok\n", "green"))
 
     write_chgs_to_file(emp_chgs, set_of_mols)

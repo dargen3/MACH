@@ -1,4 +1,6 @@
 import argparse
+from datetime import datetime
+
 import argcomplete
 from termcolor import colored
 
@@ -16,13 +18,20 @@ def load_arguments():
                              "Define used atomic classifier.",
                         choices=("plain", "hbo", "ba", "ba2"),
                         default="hbo")
+    parser.add_argument("--cross_validation",
+                        help="Use for 5 parameterization with differenct validation set of molecules.",
+                        action="store_true")
+    parser.add_argument("--data_dir",
+                        help="Defined directory stores all computed data.",
+                        default=None)
     parser.add_argument("--emp_chgs_file",
                         help="File to store calculated charges or file with charges for comparison.")
     parser.add_argument("--chg_method",
                         help="Empirical method for calculation or parameterization partial atomic charges.",
                         choices=("EEM", "EQEq", "SQE", "SQEq0", "SQEqp", "SQEqpc", "QEq_Louwen_Vogt",
                                  "QEq_Nisimoto_Mataga", "QEq_Nisimoto_Mataga_Wiess", "QEq_Ohno",
-                                 "QEq_Ohno_Klopman", "QEq_Dasgupta_Huzinaga"))
+                                 "QEq_Ohno_Klopman", "QEq_Dasgupta_Huzinaga",
+                                 "SQE_EEM", "SQE_Dasgupta_Huzinaga", "SQE_Louwen_Vogt", "SQE_Nisimoto_Mataga", "SQE_Nisimoto_Mataga_Wiess", "SQE_Ohno", "SQE_Ohno_Klopman",))
     parser.add_argument("--maxiter",
                         help="Use for local minimization only. "
                              "Define maximum number of iterations.",
@@ -46,7 +55,7 @@ def load_arguments():
                         type=int)
     parser.add_argument("--optimization_method",
                         help="Optimization method for parameterization.",
-                        choices=("local_minimization", "optGM", "GDMIN"),
+                        choices=("local_minimization", "optGM"),
                         default="optGM")
     parser.add_argument("--subset",
                         help="Use for optGM optimization method only. "
@@ -78,11 +87,14 @@ def load_arguments():
     parser.add_argument("--walltime",
                         help="Use for parameterization_meta mode only. "
                              "Define maximum time for META job in hours.",
-                        default=100,
+                        default=600,
                         type=int)
 
     argcomplete.autocomplete(parser)
     args = parser.parse_args()
+
+    if not args.data_dir:
+        args.data_dir = f"{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}_{args.mode}_{args.chg_method}_{args.sdf_file.split('/')[-1][:-4]}_{args.ats_types_pattern}"
 
     if args.mode == "set_of_molecules_info":
         if args.sdf_file is None:

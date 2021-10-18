@@ -1,9 +1,10 @@
 from .chg_method import ChargeMethod
 
 import numpy as np
-from numba import jit
+from numba import jit, objmode
 from math import erf
 
+import time
 
 @jit(nopython=True, cache=True)
 def sqeqp_calculate(set_of_molecules, params, num_ats_types):
@@ -11,10 +12,11 @@ def sqeqp_calculate(set_of_molecules, params, num_ats_types):
     for x in range(num_ats_types):
         for y in range(num_ats_types):
             multiplied_widths[x * 4][y * 4] = np.sqrt(2 * params[x * 4 + 2] ** 2 + 2 * params[y * 4 + 2] ** 2)
-
     results = np.empty(set_of_molecules.num_of_ats, dtype=np.float64)
     index = 0
     for molecule in set_of_molecules.mols:
+        with objmode(time1='f8'):
+            time1 = time.perf_counter()
         num_of_at = molecule.num_of_ats
         new_index = index + num_of_at
         T = np.zeros((len(molecule.bonds), num_of_at))
@@ -36,7 +38,10 @@ def sqeqp_calculate(set_of_molecules, params, num_ats_types):
                                                             molecule.distance_matrix[i, i + 1:]),
                                                         i + 1):
                 d0 = multiplied_widths[par_index_i, par_index_j]
+
                 matrix[i, j] = matrix[j, i] = erf(distance / d0) / distance
+
+
         list_of_q0 -= (np.sum(list_of_q0) - molecule.total_chg) / len(list_of_q0)
         vector -= np.dot(matrix, list_of_q0)
         vector += list_of_hardness * list_of_q0
@@ -46,6 +51,8 @@ def sqeqp_calculate(set_of_molecules, params, num_ats_types):
             A_sqe[i, i] += params[bond_params_index]
         results[index: new_index] = np.dot(np.linalg.solve(A_sqe, B_sqe), T) + list_of_q0
         index = new_index
+        with objmode():
+            print('name:{}  noa:{} time:{}'.format(molecule.name, molecule.num_of_ats, time.perf_counter() - time1))
     return results
 
 
@@ -67,7 +74,10 @@ class SQEqp(ChargeMethod):
         return np.array(params_bounds)
 
     def calculate(self, set_of_molecules):
-        return sqeqp_calculate(set_of_molecules, self.params_vals, len(self.ats_types))
+        sqeqp_calculate(set_of_molecules, self.params_vals, len(self.ats_types))
+        exit()
+
+
 
 
 # @jit(nopython=True, cache=True)

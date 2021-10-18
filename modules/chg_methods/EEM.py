@@ -22,6 +22,10 @@ def eem_calculate(set_of_molecules, params):
             matrix[x, x] = params[par_index + 1]
             vector[x] = -params[par_index]
         vector[-1] = molecule.total_chg
+        # if molecule.name == "Alanyl-lysyl-arginine":
+        #     print(matrix)
+        #     print(vector)
+        #     return results
         results[index: new_index] = np.linalg.solve(matrix, vector)[:-1]
         index = new_index
     return results
@@ -41,4 +45,7 @@ class EEM(ChargeMethod):
         return np.array([(0, 5) for x in range(len(self.params_vals))])
 
     def calculate(self, set_of_molecules):
+        # eem_calculate(set_of_molecules, self.params_vals)
+        # from sys import exit
+        # exit()
         return eem_calculate(set_of_molecules, self.params_vals)

@@ -21,12 +21,12 @@ class ChargeMethod:
                 self.params["metadata"]["atomic_types_pattern"] = {"plain-ba": "ba", "plain-ba-ba": "ba2"}[self.params["metadata"]["atomic_types_pattern"]]
             except KeyError:
                 pass
-
             self.ats_types_pattern = self.params["metadata"]["atomic_types_pattern"]
         else:
             self.params = self.params_pattern
             self.ats_types_pattern = ats_types_pattern
             self.params["metadata"]["atomic_types_pattern"] = ats_types_pattern
+
 
         self.params_per_at_type = len(self.params["atom"]["names"])
         method_in_params_file = self.params["metadata"]["method"]
@@ -76,6 +76,10 @@ class ChargeMethod:
         if "bond" in self.params:
             missing_bonds = set(set_of_molecules.bonds_types) - set(self.params["bond"]["data"].keys())
             for bond in missing_bonds:
+                self.params["bond"]["data"][bond] = 1000e0 # předělat!!
+                print(colored(f"Bond {bond} je 0!!", "red"))
+                continue
+
                 mat1, mat2, mtype = [value.split("/")[0] for value in bond.split("-")]
                 for key, val in self.params["bond"]["data"].items():
                     pat1, pat2, ptype = [value.split("/")[0] for value in key.split("-")]
@@ -85,9 +89,18 @@ class ChargeMethod:
                                       f"Parameter derived from {key}", "yellow"))
                         break
                 else:
-                    self.params["bond"]["data"][bond] = np.random.random()
-                    print(colored(f"    Bond type {bond} was added to parameters. "
-                                  f"Parameter is random numbers.", "yellow"))
+                    for key, val in self.params["bond"]["data"].items():
+                        pat1, pat2, ptype = [value.split("/")[0] for value in key.split("-")]
+                        if (pat1, pat2) == (mat1, mat2):
+                            self.params["bond"]["data"][bond] = val
+                            print(colored(f"    Bond type {bond} was added to parameters. "
+                                          f"Parameter derived from {key}", "yellow"))
+                            break
+
+                    else:
+                        self.params["bond"]["data"][bond] = np.random.random()
+                        print(colored(f"    Bond type {bond} was added to parameters. "
+                                      f"Parameter is random numbers.", "yellow"))
             # unused bonds are bond types which are in parameters but not in set of molecules
             unused_bonds = set(self.params["bond"]["data"].keys()) - set(set_of_molecules.bonds_types)
             for bond in unused_bonds:
@@ -109,9 +122,6 @@ class ChargeMethod:
                 params_vals.append(val)
         if "common" in self.params:
             params_vals.extend(self.params["common"].values())
-
-        params_vals = [round(x, 4) for x in params_vals]
-
         self.params_vals = np.array(params_vals, dtype=np.float64)
         self.bounds = (min(self.params_vals), max(self.params_vals))
 

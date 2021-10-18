@@ -22,26 +22,6 @@ def comparison(sdf_file: str,
     set_of_mols = create_set_of_mols(sdf_file, ats_types_pattern)
     add_chgs(set_of_mols, emp_chgs_file, "emp_chgs")
     add_chgs(set_of_mols, ref_chgs_file, "ref_chgs")
-
-    # tomas - smazat
-
-    # for molecule in set_of_mols.mols:
-    #     for a, r, e in zip(molecule.ats_srepr, molecule.ref_chgs, molecule.emp_chgs):
-    #         print(f"{a},{r},{e}")
-    #
-
-    # file_name = "_".join(set_of_mols.sdf_file.split("/")[-5:-3])
-
-    # with open("proteins12_comparison.csv", "w") as file:
-    #     file.write("Atomic type,Reference charges,Empirical charges\n")
-    #     for molecule in set_of_mols.mols:
-    #         for a, r, e in zip(molecule.ats_srepr, molecule.ref_chgs, molecule.emp_chgs):
-    #             file.write(f"{str(a)},{str(r)},{str(e)}\n")
-    #
-    #
-    # # posem :D
-    
-    
     
     print("Calculation of statistical data...")
     stats = _stats(set_of_mols, f"{data_dir}/output_files/molecules.log")
@@ -224,7 +204,6 @@ def _corr_graph(set_of_mols: SetOfMolecules,
                                         indices=source_indices[at_symbol],
                                         mols=source_mols_names[at_symbol])))
         legends.append((at_symbol, [oc]))
-
     graph.add_layout(bk.models.Legend(items=legends,
                                       label_width=100,
                                       label_height=20,
